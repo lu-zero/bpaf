@@ -58,6 +58,7 @@ members =  [
     ".",
     "./bpaf_derive",
     "./bpaf_cauwugo",
+    "./bpaf_unsynn",
     "./docs2",
     "./comptester",
     "./documentation",
