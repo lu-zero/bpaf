@@ -5,8 +5,11 @@
 
 mod attrs;
 mod field;
+mod help;
+mod mode;
 mod parsing;
 mod top;
+mod utils;
 
 use top::Top;
 use unsynn::IParse;
@@ -16,18 +19,12 @@ use unsynn::IParse;
 /// For documentation refer to bpaf library: <https://docs.rs/bpaf/latest/bpaf/>
 #[proc_macro_derive(Bpaf, attributes(bpaf))]
 pub fn derive_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    // Convert to proc_macro2::TokenStream and create token iterator
     let input2: proc_macro2::TokenStream = input.into();
     let mut iter = unsynn::ToTokens::to_token_iter(&input2);
 
-    // Parse the input using unsynn
     match iter.parse::<Top>() {
-        Ok(top) => {
-            // Convert the parsed structure back to tokens
-            quote::quote! { #top }.into()
-        }
+        Ok(top) => quote::quote! { #top }.into(),
         Err(e) => {
-            // Generate a compile error
             let err = format!("Parse error: {:?}", e);
             quote::quote! {
                 compile_error!(#err);

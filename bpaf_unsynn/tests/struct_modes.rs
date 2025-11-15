@@ -212,3 +212,216 @@ fn complex_options_minimal() {
     assert_eq!(opts.output, Vec::<String>::new());
     assert_eq!(opts.jobs, 1); // fallback value
 }
+
+// ============================================================================
+// Options mode with descr attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(options, descr("A program to test descr attribute"))]
+struct OptionsWithDescr {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn options_with_descr() {
+    let parser = OptionsWithDescr::parse();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    let opts = result.unwrap();
+    assert_eq!(opts.verbose, true);
+}
+
+// ============================================================================
+// Options mode with footer attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(options, footer("For more information visit example.com"))]
+struct OptionsWithFooter {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn options_with_footer() {
+    let parser = OptionsWithFooter::parse();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+// ============================================================================
+// Options mode with header attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(options, header("MyApp v1.0.0"))]
+struct OptionsWithHeader {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn options_with_header() {
+    let parser = OptionsWithHeader::parse();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+// ============================================================================
+// Options mode with version attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(options, version("1.2.3"))]
+struct OptionsWithVersion {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn options_with_version() {
+    let parser = OptionsWithVersion::parse();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+// ============================================================================
+// Options mode with usage attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(options, usage("myapp [OPTIONS] <files>..."))]
+struct OptionsWithUsage {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn options_with_usage() {
+    let parser = OptionsWithUsage::parse();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+// ============================================================================
+// Options mode with max_width attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(options, max_width(80))]
+struct OptionsWithMaxWidth {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn options_with_max_width() {
+    let parser = OptionsWithMaxWidth::parse();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+// ============================================================================
+// Options mode with fallback_to_usage attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(options, fallback_to_usage)]
+struct OptionsWithFallbackToUsage {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn options_with_fallback_to_usage() {
+    let parser = OptionsWithFallbackToUsage::parse();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+}
+
+// ============================================================================
+// Options mode with multiple attributes combined
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(
+    options,
+    descr("A comprehensive test program"),
+    header("MyApp - Advanced Options Test"),
+    footer("Report bugs to bugs@example.com"),
+    version("2.0.0"),
+    max_width(100)
+)]
+struct OptionsWithMultipleAttrs {
+    #[bpaf(short, long)]
+    verbose: bool,
+
+    #[bpaf(short, long, argument("FILE"))]
+    input: Option<String>,
+}
+
+#[test]
+fn options_with_multiple_attrs() {
+    let parser = OptionsWithMultipleAttrs::parse();
+    let result = parser.run_inner(&["--verbose", "--input", "test.txt"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    let opts = result.unwrap();
+    assert_eq!(opts.verbose, true);
+    assert_eq!(opts.input, Some("test.txt".to_string()));
+}
+
+// ============================================================================
+// Parser mode with group_help attribute
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(parser, group_help("Advanced settings"))]
+struct ParserWithGroupHelp {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn parser_with_group_help() {
+    let parser = ParserWithGroupHelp::parse().to_options();
+    let result = parser.run_inner(&["--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    let opts = result.unwrap();
+    assert_eq!(opts.verbose, true);
+}
+
+// ============================================================================
+// Command mode with options configuration
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(bpaf_unsynn::Bpaf)]
+#[bpaf(
+    command,
+    descr("Build command description"),
+    version("1.0.0")
+)]
+struct CommandWithOptions {
+    #[bpaf(short, long)]
+    verbose: bool,
+}
+
+#[test]
+fn command_with_options_config() {
+    let parser = CommandWithOptions::parse().to_options();
+    let result = parser.run_inner(&["commandwithoptions", "--verbose"]);
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    let opts = result.unwrap();
+    assert_eq!(opts.verbose, true);
+}

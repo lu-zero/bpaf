@@ -1,13 +1,14 @@
 //! Attribute parsing for #[bpaf(...)] annotations
 
 use crate::parsing::*;
+use crate::utils::to_kebab_case;
 
 /// Attributes that can be applied to a field
 #[derive(Debug, Clone, Default)]
 pub struct FieldAttrs {
-    /// Short flag name like 'v' for -v
+    /// Short flag name (already resolved from field name if needed)
     pub short: Option<char>,
-    /// Long flag name like "verbose" for --verbose
+    /// Long flag name (already resolved from field name if needed)
     pub long: Option<String>,
     /// Environment variable name expression
     pub env: Option<TokenStream>,
@@ -52,20 +53,6 @@ pub enum ConsumerType {
     /// Pure value with function
     PureWith { expr: TokenStream },
 }
-
-/// Mode for the generated parser function
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
-pub enum Mode {
-    /// Generate `impl Parser<T>` - basic parser (default)
-    #[default]
-    Parser,
-    /// Generate `OptionParser<T>` - includes help/version handling
-    Options,
-    /// Generate `impl Parser<T>` with command wrapper
-    Command,
-}
-
 
 /// Post-processing attribute (can change type or just behavior)
 #[derive(Debug, Clone)]
@@ -141,390 +128,255 @@ pub enum PostDecor {
 
 impl FieldAttrs {
     /// Parse attributes from a field's attribute list
+    /// Uses unsynn grammar to parse BpafAttr and DocInner structures directly
+    /// The field_name is used to derive short/long names when not explicitly specified
     pub fn parse_from_attrs(
-        attrs_tokens: &[proc_macro2::Group],
-        doc_attrs: &[proc_macro2::Group],
+        field_name: &str,
+        bpaf_attrs: &[BpafAttr],
+        doc_attrs: &[DocInner],
     ) -> Result<Self> {
+        use crate::parsing::*;
+
         let mut field_attrs = FieldAttrs::default();
 
-        // Extract doc comments if we don't have ignore_rustdoc set yet
-        // We'll check ignore_rustdoc later after parsing all attributes
-        let mut doc_strings = Vec::new();
-        for group in doc_attrs {
-            // Parse: doc = "text"
-            let stream = group.stream();
-            let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+        // Extract doc comment strings (already parsed)
+        // Remove leading space from each line (rustdoc convention)
+        let doc_strings: Vec<String> = doc_attrs
+            .iter()
+            .map(|doc| {
+                let s = doc.value.as_str();
+                s.strip_prefix(' ').unwrap_or(s).to_string()
+            })
+            .collect();
 
-            // Try to parse "doc = "text""
-            let doc_text = iter.transaction(|t| {
-                // Expect "doc"
-                let ident: Ident = t.parse()?;
-                if ident != "doc" {
-                    return Err(Error::no_error());
-                }
+        // Process bpaf attributes (already parsed)
+        for bpaf_attr in bpaf_attrs {
+            // Iterate through the inner attributes
+            for delimited in &bpaf_attr.inner.content.0 {
+                let inner = &delimited.value;
 
-                // Expect "="
-                match t.next() {
-                    Some(TokenTree::Punct(ref p)) if p.as_char() == '=' => {}
-                    _ => return Err(Error::no_error()),
-                }
+                match inner {
+                    // Name attributes - resolve immediately using field_name
+                    BpafInner::Short(si) => {
+                        field_attrs.short = Some(si.ch.as_ref()
+                            .map(|g| g.content.value())
+                            .unwrap_or_else(|| field_name.chars().next().unwrap_or('_')));
+                    }
+                    BpafInner::Long(li) => {
+                        field_attrs.long = Some(li.name.as_ref()
+                            .map(|g| g.content.as_str().to_string())
+                            .unwrap_or_else(|| to_kebab_case(field_name)));
+                    }
+                    BpafInner::Env(ei) => {
+                        field_attrs.env = Some(ei.expr.0.stream());
+                    }
 
-                // Expect string literal
-                match t.next() {
-                    Some(TokenTree::Literal(ref lit)) => {
-                        let lit_str = lit.to_string();
-                        // Remove surrounding quotes
-                        if lit_str.starts_with('"') && lit_str.ends_with('"') {
-                            let mut content = lit_str[1..lit_str.len() - 1].to_string();
-                            // Remove leading space if present (rustdoc convention)
-                            if content.starts_with(' ') {
-                                content = content[1..].to_string();
-                            }
-                            Ok(content)
+                    // Consumer attributes
+                    BpafInner::Switch(_) => {
+                        field_attrs.consumer = Some(ConsumerType::Switch);
+                    }
+                    BpafInner::Flag(fi) => {
+                        let stream = fi.values.0.stream();
+                        let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+                        let (present, absent) = if let Ok(two_args) = iter.parse::<crate::parsing::TwoArgs>() {
+                            two_args.into_streams()
                         } else {
-                            Err(Error::no_error())
-                        }
-                    }
-                    _ => Err(Error::no_error()),
-                }
-            });
-
-            if let Ok(text) = doc_text {
-                doc_strings.push(text);
-            }
-        }
-
-        for group in attrs_tokens {
-            // Each group is the content of #[bpaf(...)]
-            let stream = group.stream();
-            let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-
-            // Parse comma-separated attributes within the group
-            loop {
-                let attr_result = iter.transaction(|t| {
-                    // Try to parse an attribute
-                    let ident: Ident = t.parse()?;
-                    let ident_str = ident.to_string();
-
-                    match ident_str.as_str() {
-                        "short" => {
-                            // Parse: short or short('c')
-                            let ch = parse_optional_char_arg(t)?;
-                            field_attrs.short = Some(ch.unwrap_or({
-                                // Default to first character if not specified
-                                'x' // Placeholder, will be derived from field name
-                            }));
-                            Ok(())
-                        }
-                        "long" => {
-                            // Parse: long or long("name")
-                            let name = parse_optional_string_arg(t)?;
-                            field_attrs.long = Some(name.unwrap_or_else(|| {
-                                // Placeholder, will be derived from field name
-                                String::new()
-                            }));
-                            Ok(())
-                        }
-                        "env" => {
-                            // Parse: env("VAR_NAME") or env(expression)
-                            let env_expr = parse_optional_expr_arg(t)?;
-                            if let Some(expr) = env_expr {
-                                field_attrs.env = Some(expr);
-                            }
-                            Ok(())
-                        }
-                        "help" => {
-                            // Parse: help("description")
-                            let help_text = parse_optional_string_arg(t)?;
-                            if let Some(text) = help_text {
-                                field_attrs.help = Some(text);
-                            }
-                            Ok(())
-                        }
-                        "fallback" => {
-                            // Parse: fallback(expr)
-                            let fallback_expr = parse_optional_expr_arg(t)?;
-                            if let Some(expr) = fallback_expr {
-                                field_attrs.fallback = Some(expr);
-                            }
-                            Ok(())
-                        }
-                        "switch" => {
-                            field_attrs.consumer = Some(ConsumerType::Switch);
-                            Ok(())
-                        }
-                        "flag" => {
-                            // Parse: flag(present, absent)
-                            let args = parse_two_expr_args(t)?;
-                            if let Some((present, absent)) = args {
-                                field_attrs.consumer = Some(ConsumerType::Flag { present, absent });
-                            } else {
-                                // flag requires two arguments
-                                return Err(Error::no_error());
-                            }
-                            Ok(())
-                        }
-                        "argument" => {
-                            // Parse: argument or argument("METAVAR")
-                            let metavar = parse_optional_string_arg(t)?;
-                            field_attrs.consumer = Some(ConsumerType::Argument { metavar });
-                            Ok(())
-                        }
-                        "positional" => {
-                            // Parse: positional or positional("METAVAR")
-                            let metavar = parse_optional_string_arg(t)?;
-                            field_attrs.consumer = Some(ConsumerType::Positional { metavar });
-                            Ok(())
-                        }
-                        // Phase 5: Additional consumer types
-                        "req_flag" => {
-                            // Parse: req_flag(present_value)
-                            let present = parse_optional_expr_arg(t)?;
-                            if let Some(present) = present {
-                                field_attrs.consumer = Some(ConsumerType::ReqFlag { present });
-                            }
-                            Ok(())
-                        }
-                        "any" => {
-                            // Parse: any("METAVAR", check_function) or any::<Type>("METAVAR", check_function)
-                            let ty = parse_turbofish(t)?;
-                            let args = parse_two_expr_args(t)?;
-                            if let Some((metavar_expr, check)) = args {
-                                // Extract string from metavar_expr
-                                let metavar_str = metavar_expr.to_string();
-                                // Remove quotes if it's a string literal
-                                let metavar =
-                                    if metavar_str.starts_with('"') && metavar_str.ends_with('"') {
-                                        metavar_str[1..metavar_str.len() - 1].to_string()
-                                    } else {
-                                        metavar_str
-                                    };
-                                field_attrs.consumer =
-                                    Some(ConsumerType::Any { metavar, ty, check });
-                            }
-                            Ok(())
-                        }
-                        "external" => {
-                            // Parse: external or external(parser_fn)
-                            let ident = parse_optional_expr_arg(t)?;
-                            field_attrs.consumer = Some(ConsumerType::External { ident });
-                            Ok(())
-                        }
-                        "pure" => {
-                            // Parse: pure(value)
-                            let expr = parse_optional_expr_arg(t)?;
-                            if let Some(expr) = expr {
-                                field_attrs.consumer = Some(ConsumerType::Pure { expr });
-                            }
-                            Ok(())
-                        }
-                        "pure_with" => {
-                            // Parse: pure_with(function)
-                            let expr = parse_optional_expr_arg(t)?;
-                            if let Some(expr) = expr {
-                                field_attrs.consumer = Some(ConsumerType::PureWith { expr });
-                            }
-                            Ok(())
-                        }
-                        // PostDecor attributes
-                        "guard" => {
-                            // Parse: guard(check_fn, "error message")
-                            let args = parse_two_expr_args(t)?;
-                            if let Some((check, msg)) = args {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::Guard { check, msg }));
-                            }
-                            Ok(())
-                        }
-                        "hide" => {
-                            field_attrs.postpr.push(Post::Decor(PostDecor::Hide));
-                            Ok(())
-                        }
-                        "hide_usage" => {
-                            field_attrs.postpr.push(Post::Decor(PostDecor::HideUsage));
-                            Ok(())
-                        }
-                        "custom_usage" => {
-                            // Parse: custom_usage("usage text")
-                            let usage = parse_optional_expr_arg(t)?;
-                            if let Some(usage) = usage {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::CustomUsage { usage }));
-                            }
-                            Ok(())
-                        }
-                        // PostParse attributes
-                        "map" => {
-                            // Parse: map(function)
-                            let f = parse_optional_expr_arg(t)?;
-                            if let Some(f) = f {
-                                field_attrs.postpr.push(Post::Parse(PostParse::Map { f }));
-                            }
-                            Ok(())
-                        }
-                        "parse" => {
-                            // Parse: parse(function)
-                            let f = parse_optional_expr_arg(t)?;
-                            if let Some(f) = f {
-                                field_attrs.postpr.push(Post::Parse(PostParse::Parse { f }));
-                            }
-                            Ok(())
-                        }
-                        "optional" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Optional));
-                            Ok(())
-                        }
-                        "catch" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Catch));
-                            Ok(())
-                        }
-                        "collect" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Collect));
-                            Ok(())
-                        }
-                        "count" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Count));
-                            Ok(())
-                        }
-                        "many" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Many));
-                            Ok(())
-                        }
-                        "some" => {
-                            // Parse: some("error message")
-                            let msg = parse_optional_expr_arg(t)?;
-                            if let Some(msg) = msg {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Parse(PostParse::Some { msg }));
-                            }
-                            Ok(())
-                        }
-                        "anywhere" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Anywhere));
-                            Ok(())
-                        }
-                        "adjacent" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Adjacent));
-                            Ok(())
-                        }
-                        "strict" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::Strict));
-                            Ok(())
-                        }
-                        "non_strict" => {
-                            field_attrs.postpr.push(Post::Parse(PostParse::NonStrict));
-                            Ok(())
-                        }
-                        // Phase 4: Advanced PostDecor attributes
-                        "fallback_with" => {
-                            // Parse: fallback_with(function)
-                            let f = parse_optional_expr_arg(t)?;
-                            if let Some(f) = f {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::FallbackWith { f }));
-                            }
-                            Ok(())
-                        }
-                        "group_help" => {
-                            // Parse: group_help("doc text")
-                            let doc = parse_optional_expr_arg(t)?;
-                            if let Some(doc) = doc {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::GroupHelp { doc }));
-                            }
-                            Ok(())
-                        }
-                        "debug_fallback" => {
-                            field_attrs
-                                .postpr
-                                .push(Post::Decor(PostDecor::DebugFallback));
-                            Ok(())
-                        }
-                        "display_fallback" => {
-                            field_attrs
-                                .postpr
-                                .push(Post::Decor(PostDecor::DisplayFallback));
-                            Ok(())
-                        }
-                        "format_fallback" => {
-                            // Parse: format_fallback(formatter)
-                            let formatter = parse_optional_expr_arg(t)?;
-                            if let Some(formatter) = formatter {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::FormatFallback { formatter }));
-                            }
-                            Ok(())
-                        }
-                        "last" => {
-                            field_attrs.postpr.push(Post::Decor(PostDecor::Last));
-                            Ok(())
-                        }
-                        "group" => {
-                            // Parse: group("completion_group")
-                            let group = parse_optional_string_arg(t)?;
-                            if let Some(group) = group {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::CompleteGroup { group }));
-                            }
-                            Ok(())
-                        }
-                        "complete" => {
-                            // Parse: complete(completion_fn)
-                            let f = parse_optional_expr_arg(t)?;
-                            if let Some(f) = f {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::Complete { f }));
-                            }
-                            Ok(())
-                        }
-                        "complete_shell" => {
-                            // Parse: complete_shell(shell_comp_expr)
-                            let f = parse_optional_expr_arg(t)?;
-                            if let Some(f) = f {
-                                field_attrs
-                                    .postpr
-                                    .push(Post::Decor(PostDecor::CompleteShell { f }));
-                            }
-                            Ok(())
-                        }
-                        "ignore_rustdoc" => {
-                            // Parse: ignore_rustdoc
-                            // Note: Currently a no-op since we don't extract doc comments,
-                            // but supported for compatibility with bpaf_derive
-                            field_attrs.ignore_rustdoc = true;
-                            Ok(())
-                        }
-                        _ => {
-                            // Unknown attribute - skip for now
-                            Ok(())
-                        }
-                    }
-                });
-
-                match attr_result {
-                    Ok(()) => {
-                        // Try to consume optional comma
-                        let _ = iter.transaction(|t| match t.next() {
-                            Some(TokenTree::Punct(ref p)) if p.as_char() == ',' => Ok(()),
-                            _ => Err(Error::no_error()),
+                            (stream.clone(), proc_macro2::TokenStream::new())
+                        };
+                        field_attrs.consumer = Some(ConsumerType::Flag {
+                            present,
+                            absent,
                         });
                     }
-                    Err(_) => {
-                        // No more attributes to parse
-                        break;
+                    BpafInner::Argument(ai) => {
+                        let metavar = ai.metavar.as_ref().map(|g| g.content.as_str().to_string());
+                        field_attrs.consumer = Some(ConsumerType::Argument { metavar });
+                    }
+                    BpafInner::Positional(pi) => {
+                        let metavar = pi.metavar.as_ref().map(|g| g.content.as_str().to_string());
+                        field_attrs.consumer = Some(ConsumerType::Positional { metavar });
+                    }
+                    BpafInner::ReqFlag(ri) => {
+                        field_attrs.consumer = Some(ConsumerType::ReqFlag {
+                            present: ri.value.0.stream(),
+                        });
+                    }
+                    BpafInner::Any(ai) => {
+                        let ty = ai.turbofish.as_ref().map(|t| {
+                            let mut ts = proc_macro2::TokenStream::new();
+                            unsynn::ToTokens::to_tokens(&t.ty, &mut ts);
+                            ts
+                        });
+                        let stream = ai.args.0.stream();
+                        let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+                        let (metavar_expr, check) = if let Ok(two_args) = iter.parse::<crate::parsing::TwoArgs>() {
+                            two_args.into_streams()
+                        } else {
+                            (stream.clone(), proc_macro2::TokenStream::new())
+                        };
+
+                        let metavar_str = metavar_expr.to_string();
+                        let metavar = if metavar_str.starts_with('"') && metavar_str.ends_with('"') {
+                            metavar_str[1..metavar_str.len() - 1].to_string()
+                        } else {
+                            metavar_str
+                        };
+
+                        field_attrs.consumer = Some(ConsumerType::Any { metavar, ty, check });
+                    }
+                    BpafInner::External(ei) => {
+                        field_attrs.consumer = Some(ConsumerType::External {
+                            ident: ei.parser.as_ref().map(|p| p.0.stream()),
+                        });
+                    }
+                    BpafInner::Pure(pi) => {
+                        field_attrs.consumer = Some(ConsumerType::Pure {
+                            expr: pi.value.0.stream(),
+                        });
+                    }
+                    BpafInner::PureWith(pwi) => {
+                        field_attrs.consumer = Some(ConsumerType::PureWith {
+                            expr: pwi.func.0.stream(),
+                        });
+                    }
+
+                    // PostParse attributes
+                    BpafInner::Map(mi) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Map {
+                            f: mi.func.0.stream(),
+                        }));
+                    }
+                    BpafInner::Parse(pi) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Parse {
+                            f: pi.func.0.stream(),
+                        }));
+                    }
+                    BpafInner::Optional(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Optional));
+                    }
+                    BpafInner::Many(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Many));
+                    }
+                    BpafInner::Some(si) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Some {
+                            msg: si.msg.0.stream(),
+                        }));
+                    }
+                    BpafInner::Catch(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Catch));
+                    }
+                    BpafInner::Collect(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Collect));
+                    }
+                    BpafInner::Count(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Count));
+                    }
+                    BpafInner::Anywhere(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Anywhere));
+                    }
+                    BpafInner::Adjacent(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Adjacent));
+                    }
+                    BpafInner::Strict(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::Strict));
+                    }
+                    BpafInner::NonStrict(_) => {
+                        field_attrs.postpr.push(Post::Parse(PostParse::NonStrict));
+                    }
+
+                    // PostDecor attributes
+                    BpafInner::Guard(gi) => {
+                        let stream = gi.args.0.stream();
+                        let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+                        let (check, msg) = if let Ok(two_args) = iter.parse::<crate::parsing::TwoArgs>() {
+                            two_args.into_streams()
+                        } else {
+                            (stream.clone(), proc_macro2::TokenStream::new())
+                        };
+                        field_attrs.postpr.push(Post::Decor(PostDecor::Guard {
+                            check,
+                            msg,
+                        }));
+                    }
+                    BpafInner::Hide(_) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::Hide));
+                    }
+                    BpafInner::HideUsage(_) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::HideUsage));
+                    }
+                    BpafInner::CustomUsage(cui) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::CustomUsage {
+                            usage: cui.text.0.stream(),
+                        }));
+                    }
+                    BpafInner::FallbackWith(fwi) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::FallbackWith {
+                            f: fwi.func.0.stream(),
+                        }));
+                    }
+                    BpafInner::GroupHelp(ghi) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::GroupHelp {
+                            doc: ghi.text.0.stream(),
+                        }));
+                    }
+                    BpafInner::DebugFallback(_) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::DebugFallback));
+                    }
+                    BpafInner::DisplayFallback(_) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::DisplayFallback));
+                    }
+                    BpafInner::FormatFallback(ffi) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::FormatFallback {
+                            formatter: ffi.formatter.0.stream(),
+                        }));
+                    }
+                    BpafInner::Last(_) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::Last));
+                    }
+                    BpafInner::Complete(ci) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::Complete {
+                            f: ci.func.0.stream(),
+                        }));
+                    }
+                    BpafInner::Group(gi) => {
+                        let group = gi.name.content.as_str().to_string();
+                        field_attrs.postpr.push(Post::Decor(PostDecor::CompleteGroup { group }));
+                    }
+                    BpafInner::CompleteShell(csi) => {
+                        field_attrs.postpr.push(Post::Decor(PostDecor::CompleteShell {
+                            f: csi.expr.0.stream(),
+                        }));
+                    }
+
+                    // Other attributes
+                    BpafInner::Help(hi) => {
+                        field_attrs.help = Some(hi.text.content.as_str().to_string());
+                    }
+                    BpafInner::Fallback(fi) => {
+                        field_attrs.fallback = Some(fi.expr.0.stream());
+                    }
+                    BpafInner::IgnoreRustdoc(_) => {
+                        field_attrs.ignore_rustdoc = true;
+                    }
+
+                    // Mode attributes (shouldn't appear on fields, but handle gracefully)
+                    BpafInner::Options(_) | BpafInner::Parser(_) | BpafInner::Command(_)
+                    | BpafInner::Skip(_) | BpafInner::FallbackToUsage(_) | BpafInner::Path(_)
+                    | BpafInner::Generate(_) | BpafInner::Private(_) | BpafInner::Boxed(_)
+                    | BpafInner::Descr(_) | BpafInner::Footer(_) | BpafInner::Header(_)
+                    | BpafInner::Usage(_) | BpafInner::Version(_) | BpafInner::MaxWidth(_)
+                    | BpafInner::CargoHelper(_) => {
+                        // These are enum/struct-level attributes, not field-level
+                        // Ignore them here
+                    }
+
+                    // Unknown attributes
+                    BpafInner::Unknown(_) => {
+                        // Forward compatibility - ignore unknown attributes
                     }
                 }
             }
         }
-
         // Use doc comments as help text if:
         // 1. ignore_rustdoc is false (default)
         // 2. No explicit help attribute was provided
@@ -537,231 +389,54 @@ impl FieldAttrs {
     }
 }
 
-/// Parse optional char argument like ('c')
-fn parse_optional_char_arg(iter: &mut TokenIter) -> Result<Option<char>> {
-    iter.transaction(|t| {
-        // Look for opening paren
-        match t.next() {
-            Some(TokenTree::Group(ref g))
-                if g.delimiter() == proc_macro2::Delimiter::Parenthesis =>
-            {
-                // Parse the char literal inside
-                let stream = g.stream();
-                let mut inner = unsynn::ToTokens::to_token_iter(&stream);
-                match inner.next() {
-                    Some(TokenTree::Literal(ref lit)) => {
-                        // Parse char from literal
-                        let lit_str = lit.to_string();
-                        if lit_str.starts_with('\'')
-                            && lit_str.ends_with('\'')
-                            && lit_str.len() == 3
-                        {
-                            let ch = lit_str.chars().nth(1).unwrap();
-                            Ok(Some(ch))
-                        } else {
-                            Err(Error::no_error())
-                        }
-                    }
-                    _ => Err(Error::no_error()),
-                }
-            }
-            _ => Err(Error::no_error()),
-        }
-    })
-    .or(Ok(None))
-}
-
-/// Parse optional string argument like ("name")
-fn parse_optional_string_arg(iter: &mut TokenIter) -> Result<Option<String>> {
-    iter.transaction(|t| {
-        // Look for opening paren
-        match t.next() {
-            Some(TokenTree::Group(ref g))
-                if g.delimiter() == proc_macro2::Delimiter::Parenthesis =>
-            {
-                // Parse the string literal inside
-                let stream = g.stream();
-                let mut inner = unsynn::ToTokens::to_token_iter(&stream);
-                match inner.next() {
-                    Some(TokenTree::Literal(ref lit)) => {
-                        // Parse string from literal
-                        let lit_str = lit.to_string();
-                        if lit_str.starts_with('"') && lit_str.ends_with('"') {
-                            let s = lit_str[1..lit_str.len() - 1].to_string();
-                            Ok(Some(s))
-                        } else {
-                            Err(Error::no_error())
-                        }
-                    }
-                    _ => Err(Error::no_error()),
-                }
-            }
-            _ => Err(Error::no_error()),
-        }
-    })
-    .or(Ok(None))
-}
-
-/// Parse optional expression argument like (value)
-fn parse_optional_expr_arg(iter: &mut TokenIter) -> Result<Option<TokenStream>> {
-    iter.transaction(|t| {
-        // Look for opening paren
-        match t.next() {
-            Some(TokenTree::Group(ref g))
-                if g.delimiter() == proc_macro2::Delimiter::Parenthesis =>
-            {
-                // Return the entire content as TokenStream
-                Ok(Some(g.stream()))
-            }
-            _ => Err(Error::no_error()),
-        }
-    })
-    .or(Ok(None))
-}
-
-/// Parse optional turbofish type like ::<Type>
-fn parse_turbofish(iter: &mut TokenIter) -> Result<Option<TokenStream>> {
-    iter.transaction(|t| {
-        // Look for :: followed by < Type >
-        match (t.next(), t.next()) {
-            (Some(TokenTree::Punct(ref p1)), Some(TokenTree::Punct(ref p2)))
-                if p1.as_char() == ':' && p2.as_char() == ':' =>
-            {
-                // Now expect < Type >
-                match t.next() {
-                    Some(TokenTree::Punct(ref p)) if p.as_char() == '<' => {
-                        // Collect tokens until we find the closing >
-                        let mut ty = TokenStream::new();
-                        let mut depth = 1;
-
-                        loop {
-                            match t.next() {
-                                Some(TokenTree::Punct(ref p)) if p.as_char() == '<' => {
-                                    depth += 1;
-                                    ty.extend(std::iter::once(TokenTree::Punct(p.clone())));
-                                }
-                                Some(TokenTree::Punct(ref p)) if p.as_char() == '>' => {
-                                    depth -= 1;
-                                    if depth == 0 {
-                                        break;
-                                    }
-                                    ty.extend(std::iter::once(TokenTree::Punct(p.clone())));
-                                }
-                                Some(tt) => {
-                                    ty.extend(std::iter::once(tt));
-                                }
-                                None => return Err(Error::no_error()),
-                            }
-                        }
-
-                        Ok(Some(ty))
-                    }
-                    _ => Err(Error::no_error()),
-                }
-            }
-            _ => Err(Error::no_error()),
-        }
-    })
-    .or(Ok(None))
-}
-
-/// Parse two comma-separated expression arguments like (expr1, expr2)
-fn parse_two_expr_args(iter: &mut TokenIter) -> Result<Option<(TokenStream, TokenStream)>> {
-    iter.transaction(|t| {
-        // Look for opening paren
-        match t.next() {
-            Some(TokenTree::Group(ref g))
-                if g.delimiter() == proc_macro2::Delimiter::Parenthesis =>
-            {
-                // Parse the content: expr, expr
-                let stream = g.stream();
-                let mut inner = unsynn::ToTokens::to_token_iter(&stream);
-
-                // Collect tokens until comma
-                let mut first = TokenStream::new();
-                let mut found_comma = false;
-
-                loop {
-                    match inner.next() {
-                        Some(TokenTree::Punct(ref p)) if p.as_char() == ',' => {
-                            found_comma = true;
-                            break;
-                        }
-                        Some(tt) => {
-                            first.extend(std::iter::once(tt));
-                        }
-                        None => break,
-                    }
-                }
-
-                if !found_comma {
-                    return Err(Error::no_error());
-                }
-
-                // Collect remaining tokens as second expression
-                let mut second = TokenStream::new();
-                for tt in inner {
-                    second.extend(std::iter::once(tt));
-                }
-
-                if first.is_empty() || second.is_empty() {
-                    return Err(Error::no_error());
-                }
-
-                Ok(Some((first, second)))
-            }
-            _ => Err(Error::no_error()),
-        }
-    })
-    .or(Ok(None))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parsing::BpafAttr;
+
+    fn parse_bpaf_attr(content: &str) -> BpafAttr {
+        let tokens: TokenStream = format!("bpaf({})", content).parse().unwrap();
+        let mut iter = unsynn::ToTokens::to_token_iter(&tokens);
+        iter.parse::<BpafAttr>().unwrap()
+    }
 
     #[test]
     fn test_parse_short_attr() {
-        // Test parsing: #[bpaf(short)]
-        let tokens: TokenStream = "short".parse().unwrap();
-        let group = proc_macro2::Group::new(proc_macro2::Delimiter::Parenthesis, tokens);
-        let attrs = FieldAttrs::parse_from_attrs(&[group], &[]).unwrap();
-        assert!(attrs.short.is_some());
+        // Test parsing: #[bpaf(short)] - derive from field name
+        let bpaf_attr = parse_bpaf_attr("short");
+        let attrs = FieldAttrs::parse_from_attrs("verbose", &[bpaf_attr], &[]).unwrap();
+        assert_eq!(attrs.short, Some('v')); // Derived from field name
     }
 
     #[test]
     fn test_parse_long_attr() {
-        // Test parsing: #[bpaf(long)]
-        let tokens: TokenStream = "long".parse().unwrap();
-        let group = proc_macro2::Group::new(proc_macro2::Delimiter::Parenthesis, tokens);
-        let attrs = FieldAttrs::parse_from_attrs(&[group], &[]).unwrap();
-        assert!(attrs.long.is_some());
+        // Test parsing: #[bpaf(long)] - derive from field name
+        let bpaf_attr = parse_bpaf_attr("long");
+        let attrs = FieldAttrs::parse_from_attrs("my_field", &[bpaf_attr], &[]).unwrap();
+        assert_eq!(attrs.long, Some("my-field".to_string())); // Derived from field name
     }
 
     #[test]
     fn test_parse_short_with_value() {
-        // Test parsing: #[bpaf(short('v'))]
-        let tokens: TokenStream = "short('v')".parse().unwrap();
-        let group = proc_macro2::Group::new(proc_macro2::Delimiter::Parenthesis, tokens);
-        let attrs = FieldAttrs::parse_from_attrs(&[group], &[]).unwrap();
+        // Test parsing: #[bpaf(short('v'))] - explicit char
+        let bpaf_attr = parse_bpaf_attr("short('v')");
+        let attrs = FieldAttrs::parse_from_attrs("other", &[bpaf_attr], &[]).unwrap();
         assert_eq!(attrs.short, Some('v'));
     }
 
     #[test]
     fn test_parse_long_with_value() {
-        // Test parsing: #[bpaf(long("verbose"))]
-        let tokens: TokenStream = r#"long("verbose")"#.parse().unwrap();
-        let group = proc_macro2::Group::new(proc_macro2::Delimiter::Parenthesis, tokens);
-        let attrs = FieldAttrs::parse_from_attrs(&[group], &[]).unwrap();
+        // Test parsing: #[bpaf(long("verbose"))] - explicit name
+        let bpaf_attr = parse_bpaf_attr(r#"long("verbose")"#);
+        let attrs = FieldAttrs::parse_from_attrs("other", &[bpaf_attr], &[]).unwrap();
         assert_eq!(attrs.long, Some("verbose".to_string()));
     }
 
     #[test]
     fn test_parse_multiple_attrs() {
         // Test parsing: #[bpaf(short('v'), long("verbose"))]
-        let tokens: TokenStream = r#"short('v'), long("verbose")"#.parse().unwrap();
-        let group = proc_macro2::Group::new(proc_macro2::Delimiter::Parenthesis, tokens);
-        let attrs = FieldAttrs::parse_from_attrs(&[group], &[]).unwrap();
+        let bpaf_attr = parse_bpaf_attr(r#"short('v'), long("verbose")"#);
+        let attrs = FieldAttrs::parse_from_attrs("other", &[bpaf_attr], &[]).unwrap();
         assert_eq!(attrs.short, Some('v'));
         assert_eq!(attrs.long, Some("verbose".to_string()));
     }

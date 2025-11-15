@@ -1,12 +1,87 @@
 //! Top-level structure parsing
 
+use crate::attrs::{ConsumerType, FieldAttrs, Post, PostDecor, PostParse};
+use crate::utils::to_kebab_case;
+use crate::mode::Mode;
 use crate::parsing::*;
-use crate::field::{analyze_type, Shape};
-use crate::attrs::{FieldAttrs, ConsumerType, Post, PostParse, PostDecor, Mode};
 use quote::{quote, ToTokens};
 
+// Constants for magic strings
+const DEFAULT_POSITIONAL_METAVAR: &str = "ARG";
+const TUPLE_FIELD_NAME_PREFIX: &str = "field_";
+
+/// Apply command variant modifiers in the correct order
+/// This includes: help, fallback_to_usage, command, long, short, and hide
+fn apply_command_modifiers(
+    base: TokenStream,
+    help_text: Option<String>,
+    variant: &EnumBranch,
+    command_name: &str,
+) -> TokenStream {
+    let with_help = if let Some(help) = help_text {
+        quote! { #base.descr(#help) }
+    } else {
+        base
+    };
+
+    let with_fallback = if variant.fallback_to_usage {
+        quote! { #with_help.fallback_to_usage() }
+    } else {
+        with_help
+    };
+
+    let with_command = quote! {
+        #with_fallback.command(#command_name)
+    };
+
+    let with_long = if let Some(ref alias) = variant.long_alias {
+        quote! { #with_command.long(#alias) }
+    } else {
+        with_command
+    };
+
+    let with_short = if let Some(alias) = variant.short_alias {
+        quote! { #with_long.short(#alias) }
+    } else {
+        with_long
+    };
+
+    if variant.hide {
+        quote! { #with_short.hide() }
+    } else {
+        with_short
+    }
+}
+
+/// A single outer attribute: #[...]
+type OuterAttr = Cons<Pound, BracketGroupContaining<Attribute>>;
+
+/// Collect bpaf attributes and doc comments from a token stream
+/// Uses unsynn grammar to parse attributes directly
+fn collect_attributes(iter: &mut TokenIter) -> (Vec<BpafAttr>, Vec<DocInner>) {
+    use crate::parsing::*;
+
+    // Parse all attributes at once
+    let attrs: Option<Many<OuterAttr>> = iter.parse().ok();
+
+    let mut bpaf_attrs = Vec::new();
+    let mut doc_comments = Vec::new();
+
+    if let Some(attrs) = attrs {
+        for attr in attrs.0 {
+            match attr.value.second.content {
+                Attribute::Bpaf(bpaf_attr) => bpaf_attrs.push(bpaf_attr),
+                Attribute::Doc(doc_inner) => doc_comments.push(doc_inner),
+                Attribute::Other(_) => {} // Ignore
+            }
+        }
+    }
+
+    (bpaf_attrs, doc_comments)
+}
+
 /// Parse fields from a brace group
-fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<Field>> {
+fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
     let mut fields = Vec::new();
     let stream = group.stream();
     let mut iter = unsynn::ToTokens::to_token_iter(&stream);
@@ -15,87 +90,36 @@ fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<Field>> {
         // Try to parse a field: name : type,
         let field_result = iter.transaction(|t| {
             // Collect bpaf attributes and doc comments
-            let mut bpaf_attrs = Vec::new();
-            let mut doc_comments = Vec::new();
-            loop {
-                let attr_result = t.transaction(|t2| {
-                    if let Some(TokenTree::Punct(ref p)) = t2.next() {
-                        if p.as_char() == '#' {
-                            // Get the attribute group
-                            if let Some(TokenTree::Group(ref g)) = t2.next() {
-                                // Check if this is a #[bpaf(...)] or #[doc = "..."] attribute
-                                let attr_stream = g.stream();
-                                let attr_str = attr_stream.to_string();
-                                if attr_str.starts_with("bpaf") {
-                                    // Extract the inner group from bpaf(...)
-                                    let mut attr_iter = unsynn::ToTokens::to_token_iter(&attr_stream);
-                                    // Skip "bpaf" identifier
-                                    let _ = attr_iter.next();
-                                    // Get the parenthesized group
-                                    if let Some(TokenTree::Group(ref inner)) = attr_iter.next() {
-                                        bpaf_attrs.push(inner.clone());
-                                    }
-                                } else if attr_str.starts_with("doc") {
-                                    // Extract doc comment: doc = "text"
-                                    doc_comments.push(g.clone());
-                                }
-                            }
-                            return Ok(true);
-                        }
-                    }
-                    Err(Error::no_error())
-                });
-                if attr_result.is_err() {
-                    break;
-                }
-            }
+            let (bpaf_attrs, doc_comments) = collect_attributes(t);
 
             // Skip visibility if present
-            let _ = t.transaction(|t2| {
-                let ident: Ident = t2.parse()?;
-                if ident == "pub" {
-                    Ok(())
-                } else {
-                    Err(Error::no_error())
-                }
-            });
+            let _ = t.parse::<crate::parsing::Visibility>();
 
             // Get field name
             let name: Ident = t.parse()?;
 
             // Expect colon
-            match t.next() {
-                Some(TokenTree::Punct(ref p)) if p.as_char() == ':' => {}
-                _ => return Err(Error::no_error()),
-            }
+            let _: Colon = t.parse()?;
 
-            // Collect type tokens until we hit a comma or end
-            let mut ty_tokens = TokenStream::new();
-            loop {
-                match t.next() {
-                    Some(TokenTree::Punct(ref p)) if p.as_char() == ',' => {
-                        break; // End of this field
-                    }
-                    Some(tt) => {
-                        ty_tokens.extend(std::iter::once(tt.clone()));
-                    }
-                    None => {
-                        break; // End of fields
-                    }
-                }
-            }
+            // Collect type tokens until comma or end using VerbatimUntilComma
+            let ty_verbatim: VerbatimUntilComma = t.parse()?;
+            let ty_tokens = unsynn::ToTokens::to_token_stream(&ty_verbatim);
 
-            // Analyze the type to determine its shape
-            let (shape, inner_ty) = analyze_type(&ty_tokens);
+            // Consume optional trailing comma
+            let _ = t.parse::<Comma>();
+
+            // Parse type shape directly from tokens
+            let mut ty_iter = unsynn::ToTokens::to_token_iter(&ty_tokens);
+            let shape: TypeShape = ty_iter.parse()?;
 
             // Parse field attributes
-            let attrs = FieldAttrs::parse_from_attrs(&bpaf_attrs, &doc_comments).unwrap_or_default();
+            let attrs =
+                FieldAttrs::parse_from_attrs(&name.to_string(), &bpaf_attrs, &doc_comments).unwrap_or_default();
 
-            Ok(Field {
+            Ok(StructField {
                 name,
                 ty: ty_tokens,
                 shape,
-                inner_ty,
                 attrs,
             })
         });
@@ -112,8 +136,44 @@ fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<Field>> {
     Ok(fields)
 }
 
+/// Parse tuple variant fields from a parenthesis group
+/// Supports multi-field tuple variants
+fn parse_tuple_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
+    let stream = group.stream();
+    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+
+    // Parse comma-delimited types
+    let types: CommaDelimitedVec<VerbatimUntilComma> = iter.parse()?;
+
+    let fields = types
+        .0
+        .into_iter()
+        .enumerate()
+        .filter_map(|(field_index, delimited)| {
+            let ty_tokens = unsynn::ToTokens::to_token_stream(&delimited.value);
+            let mut ty_iter = unsynn::ToTokens::to_token_iter(&ty_tokens);
+            let shape: TypeShape = ty_iter.parse().ok()?;
+            let name = quote::format_ident!("{}{}", TUPLE_FIELD_NAME_PREFIX, field_index);
+
+            Some(StructField {
+                name,
+                ty: ty_tokens,
+                shape,
+                attrs: FieldAttrs {
+                    consumer: Some(ConsumerType::Positional {
+                        metavar: Some(DEFAULT_POSITIONAL_METAVAR.to_string()),
+                    }),
+                    ..Default::default()
+                },
+            })
+        })
+        .collect();
+
+    Ok(fields)
+}
+
 /// Parse enum variants from a brace group
-fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumVariant>> {
+fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
     let mut variants = Vec::new();
     let stream = group.stream();
     let mut iter = unsynn::ToTokens::to_token_iter(&stream);
@@ -121,48 +181,54 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumVariant>> {
     loop {
         // Try to parse a variant
         let variant_result = iter.transaction(|t| {
-            // Skip attributes for now
-            loop {
-                let has_attr = t.transaction(|t2| {
-                    if let Some(TokenTree::Punct(ref p)) = t2.next() {
-                        if p.as_char() == '#' {
-                            let _ = t2.next(); // consume group
-                            return Ok(true);
-                        }
-                    }
-                    Err(Error::no_error())
-                });
-                if has_attr.is_err() {
-                    break;
-                }
-            }
+            // Collect bpaf attributes and doc comments
+            let (bpaf_attrs, doc_comments) = collect_attributes(t);
+
+            // Parse variant attributes
+            let variant_attrs = parse_variant_attrs(&bpaf_attrs);
+
+            // Extract doc comments
+            let doc_comment_strings = extract_doc_comments(&doc_comments);
 
             // Get variant name
             let name: Ident = t.parse()?;
 
             // Check for variant fields
-            let fields = match t.next() {
+            let (fields, is_tuple) = match t.next() {
                 // Struct-style variant: Variant { field: Type, ... }
                 Some(TokenTree::Group(ref g)) if g.delimiter() == proc_macro2::Delimiter::Brace => {
-                    parse_fields(g)?
+                    (parse_fields(g)?, false)
                 }
-                // Tuple-style or unit variant - skip fields for now
-                _ => Vec::new(),
+                // Tuple-style variant: Variant(Type)
+                Some(TokenTree::Group(ref g))
+                    if g.delimiter() == proc_macro2::Delimiter::Parenthesis =>
+                {
+                    (parse_tuple_fields(g)?, true)
+                }
+                // Unit variant
+                _ => (Vec::new(), false),
             };
 
-            Ok(EnumVariant { name, fields })
+            Ok(EnumBranch {
+                name,
+                fields,
+                doc_comments: doc_comment_strings,
+                is_command: variant_attrs.is_command,
+                command_name: variant_attrs.command_name,
+                skip: variant_attrs.skip,
+                hide: variant_attrs.hide,
+                fallback_to_usage: variant_attrs.fallback_to_usage,
+                is_tuple,
+                long_alias: variant_attrs.long_alias,
+                short_alias: variant_attrs.short_alias,
+            })
         });
 
         match variant_result {
             Ok(variant) => {
                 variants.push(variant);
                 // Try to consume comma
-                let _ = iter.transaction(|t| {
-                    match t.next() {
-                        Some(TokenTree::Punct(ref p)) if p.as_char() == ',' => Ok(()),
-                        _ => Err(Error::no_error()),
-                    }
-                });
+                let _ = iter.parse::<Comma>();
             }
             Err(_) => {
                 // No more variants
@@ -174,17 +240,156 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumVariant>> {
     Ok(variants)
 }
 
+/// Enum Decor - variant-level attributes
+#[derive(Default)]
+struct Ed {
+    is_command: bool,
+    command_name: Option<String>,
+    skip: bool,
+    hide: bool,
+    fallback_to_usage: bool,
+    long_alias: Option<String>,
+    short_alias: Option<char>,
+}
+
+/// Parse variant-level attributes from #[bpaf(...)]
+/// Accepts parsed BpafAttr structures from the unsynn grammar
+fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
+    use crate::parsing::*;
+
+    let mut result = Ed::default();
+
+    for bpaf_attr in attrs {
+        // Access the inner DelimitedVec directly from the parsed structure
+        for delimited in &bpaf_attr.inner.content.0 {
+            match &delimited.value {
+                BpafInner::Command(cmd) => {
+                    result.is_command = true;
+                    result.command_name = cmd.name.as_ref().map(|g| g.content.as_str().to_string());
+                }
+                BpafInner::Skip(_) => {
+                    result.skip = true;
+                }
+                BpafInner::Hide(_) => {
+                    result.hide = true;
+                }
+                BpafInner::FallbackToUsage(_) => {
+                    result.fallback_to_usage = true;
+                }
+                BpafInner::Long(long) => {
+                    result.long_alias = long.name.as_ref().map(|g| g.content.as_str().to_string());
+                }
+                BpafInner::Short(short) => {
+                    result.short_alias = short.ch.as_ref().map(|g| g.content.value());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    result
+}
+
+/// Parse doc comments into paragraphs directly from DocInner structures
+///
+/// Groups consecutive non-empty doc comments, using empty lines as paragraph separators.
+/// Returns (first_paragraph, second_paragraph, remaining_paragraphs)
+fn parse_doc_paragraphs(doc_attrs: &[DocInner]) -> (Option<String>, Option<String>, Option<String>) {
+    let mut paragraphs = Vec::new();
+    let mut current = String::new();
+    let mut prev_empty = false;
+
+    for doc_inner in doc_attrs {
+        let s = doc_inner.value.as_str();
+        let content = s.strip_prefix(' ').unwrap_or(s);
+
+        if content.is_empty() {
+            if prev_empty && !current.is_empty() {
+                // Double empty line - paragraph separator
+                current.truncate(current.trim_end().len());
+                paragraphs.push(current.clone());
+                current.clear();
+                prev_empty = false;
+            } else {
+                prev_empty = true;
+            }
+        } else {
+            if prev_empty && !current.is_empty() {
+                current.push('\n');
+            }
+            current.push_str(&content);
+            current.push('\n');
+            prev_empty = false;
+        }
+    }
+
+    // Push final paragraph if any
+    if !current.is_empty() {
+        current.truncate(current.trim_end().len());
+        paragraphs.push(current);
+    }
+
+    let first = paragraphs.get(0).cloned();
+    let second = paragraphs.get(1).cloned().filter(|s| !s.is_empty());
+    let rest = if paragraphs.len() > 2 {
+        Some(paragraphs[2..].join("\n"))
+    } else {
+        None
+    };
+
+    (first, second, rest)
+}
+
+/// Split doc comments into descr/header/footer for Options mode
+///
+/// Parses doc comment paragraphs and assigns them to descr/header/footer:
+/// - First paragraph -> descr
+/// - Second paragraph -> header
+/// - Third and subsequent paragraphs -> footer
+fn split_options_help(doc_attrs: &[DocInner], opts: &mut crate::mode::OptionsCfg) {
+    use crate::help::Help;
+
+    let (first, second, rest) = parse_doc_paragraphs(doc_attrs);
+
+    if let Some(descr) = first {
+        if opts.descr.is_none() {
+            opts.descr = Some(Help::Doc(descr));
+        }
+    }
+
+    if let Some(header) = second {
+        if opts.header.is_none() {
+            opts.header = Some(Help::Doc(header));
+        }
+    }
+
+    if let Some(footer) = rest {
+        if opts.footer.is_none() {
+            opts.footer = Some(Help::Doc(footer));
+        }
+    }
+}
+
+/// Extract all doc comments as individual strings
+fn extract_doc_comments(doc_attrs: &[DocInner]) -> Vec<String> {
+    doc_attrs
+        .iter()
+        .map(|doc_inner| {
+            let s = doc_inner.value.as_str();
+            s.strip_prefix(' ').unwrap_or(s).to_string()
+        })
+        .collect()
+}
+
 /// Represents a single field in a struct
 #[derive(Clone)]
-pub struct Field {
+pub struct StructField {
     /// Field name
     pub name: Ident,
     /// Field type (stored as tokens)
     pub ty: TokenStream,
-    /// The shape of the field's type
-    pub shape: Shape,
-    /// Inner type for Option<T> or Vec<T>
-    pub inner_ty: TokenStream,
+    /// The shape of the field's type (includes inner type for Option/Vec)
+    pub shape: TypeShape,
     /// Parsed attributes from #[bpaf(...)]
     pub attrs: FieldAttrs,
 }
@@ -199,129 +404,399 @@ pub struct Top {
     pub adjacent: bool,
     /// Mode for the generated parser function
     pub mode: Mode,
+    /// Fallback value for the parser (from #[bpaf(fallback(...))])
+    pub fallback: Option<proc_macro2::TokenStream>,
+    /// Custom path to the bpaf crate (from #[bpaf(path(...))])
+    pub bpaf_path: Option<proc_macro2::TokenStream>,
+    /// Custom function name (from #[bpaf(generate(...))])
+    pub custom_name: Option<Ident>,
+    /// Generate private function (from #[bpaf(private)])
+    pub private: bool,
+    /// Add .boxed() wrapper (from #[bpaf(boxed)])
+    pub boxed: bool,
+    /// Top-level PostDecor attributes (guard, hide, etc.)
+    pub attrs: Vec<Post>,
 }
 
 /// The body of the derived item
 #[derive(Clone)]
 pub enum Body {
     /// Struct with fields
-    Struct(Vec<Field>),
+    Struct(Vec<StructField>),
     /// Enum with variants
-    Enum(Vec<EnumVariant>),
+    Enum(Vec<EnumBranch>),
 }
 
 /// Represents an enum variant
 #[derive(Clone)]
-pub struct EnumVariant {
+pub struct EnumBranch {
     /// Variant name
     pub name: Ident,
     /// Fields in the variant (if any)
-    pub fields: Vec<Field>,
+    pub fields: Vec<StructField>,
+    /// Doc comments extracted from #[doc = "..."]
+    pub doc_comments: Vec<String>,
+    /// Whether this variant has #[bpaf(command)]
+    pub is_command: bool,
+    /// Custom command name from #[bpaf(command("name"))]
+    pub command_name: Option<String>,
+    /// Whether this variant has #[bpaf(skip)]
+    pub skip: bool,
+    /// Whether this variant has #[bpaf(hide)]
+    pub hide: bool,
+    /// Whether this variant has #[bpaf(fallback_to_usage)]
+    pub fallback_to_usage: bool,
+    /// Whether this is a tuple variant (e.g., Variant(Type))
+    pub is_tuple: bool,
+    /// Long alias from #[bpaf(long("alias"))]
+    pub long_alias: Option<String>,
+    /// Short alias from #[bpaf(short('x'))]
+    pub short_alias: Option<char>,
 }
 
 /// Parse struct-level attributes from #[bpaf(...)]
-/// Parsed struct-level attributes
+/// Top-level struct/enum attributes
 #[derive(Default)]
-struct StructAttrs {
+struct TopInfo {
     adjacent: bool,
-    mode: Option<Mode>,
+    mode: Mode,
+    fallback: Option<proc_macro2::TokenStream>,
+    bpaf_path: Option<proc_macro2::TokenStream>,
+    custom_name: Option<Ident>,
+    private: bool,
+    boxed: bool,
+    ignore_rustdoc: bool,
+    attrs: Vec<Post>,
 }
 
-fn parse_struct_attrs(group: &proc_macro2::Group) -> Result<Option<StructAttrs>> {
-    use unsynn::ToTokens;
+/// Helper function to apply a change to OptionsCfg if it exists
+fn with_options<F>(options: &mut Option<crate::mode::OptionsCfg>, f: F)
+where
+    F: FnOnce(&mut crate::mode::OptionsCfg),
+{
+    if let Some(opts) = options.as_mut() {
+        f(opts);
+    }
+}
 
-    let stream = group.stream();
-    let mut iter = ToTokens::to_token_iter(&stream);
+/// Helper function to apply a change to ParserCfg if it exists
+fn with_parser<F>(parser: &mut Option<crate::mode::ParserCfg>, f: F)
+where
+    F: FnOnce(&mut crate::mode::ParserCfg),
+{
+    if let Some(p) = parser.as_mut() {
+        f(p);
+    }
+}
 
-    // Check if this is a bpaf attribute
-    match iter.next() {
-        Some(TokenTree::Ident(ref ident)) if *ident == "bpaf" => {
-            // Found #[bpaf(...)]
-            // Now parse the parentheses group
-            match iter.next() {
-                Some(TokenTree::Group(ref g)) if g.delimiter() == proc_macro2::Delimiter::Parenthesis => {
-                    // Parse the content
-                    let inner_stream = g.stream();
-                    let inner_iter = ToTokens::to_token_iter(&inner_stream);
-                    let mut attrs = StructAttrs::default();
+/// Helper function to apply a change to CommandCfg if it exists
+fn with_command<F>(command: &mut Option<crate::mode::CommandCfg>, f: F)
+where
+    F: FnOnce(&mut crate::mode::CommandCfg),
+{
+    if let Some(cmd) = command.as_mut() {
+        f(cmd);
+    }
+}
 
-                    for tt in inner_iter {
-                        if let TokenTree::Ident(ref ident) = tt {
-                            let ident_str = ident.to_string();
-                            match ident_str.as_str() {
-                                "adjacent" => {
-                                    attrs.adjacent = true;
-                                }
-                                "options" => {
-                                    attrs.mode = Some(Mode::Options);
-                                }
-                                "command" => {
-                                    attrs.mode = Some(Mode::Command);
-                                }
-                                "parser" => {
-                                    attrs.mode = Some(Mode::Parser);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    return Ok(Some(attrs));
-                }
-                _ => {}
+fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
+    use crate::attrs::{Post, PostDecor};
+    use crate::help::Help;
+    use crate::mode::{CommandCfg, OptionsCfg, ParserCfg};
+    use crate::parsing::*;
+
+    // Mode configuration tracking (following bpaf_derive pattern)
+    let mut command: Option<CommandCfg> = None;
+    let mut options: Option<OptionsCfg> = None;
+    let mut parser: Option<ParserCfg> = Some(ParserCfg::default());
+
+    // Other top-level attributes
+    let mut adjacent = false;
+    let mut fallback = None;
+    let mut bpaf_path = None;
+    let mut custom_name = None;
+    let mut private = false;
+    let mut boxed = false;
+    let mut ignore_rustdoc = false;
+    let mut top_attrs = Vec::new();
+
+    let mut first = true;
+
+    // Access the inner DelimitedVec directly from the parsed structure
+    for delimited in &bpaf_attr.inner.content.0 {
+        match &delimited.value {
+            // Mode keywords (must be first)
+            BpafInner::Options(_) if first => {
+                options = Some(OptionsCfg::default());
+                parser = None;
             }
+            BpafInner::Command(_) if first => {
+                command = Some(CommandCfg::default());
+                options = Some(OptionsCfg::default());
+                parser = None;
+            }
+            BpafInner::Parser(_) if first => {
+                // Already default
+            }
+
+            // Non-mode attributes
+            BpafInner::Adjacent(_) => {
+                adjacent = true;
+            }
+            BpafInner::Fallback(fb) => {
+                fallback = Some(fb.expr.0.stream());
+            }
+            BpafInner::Path(p) => {
+                bpaf_path = Some(p.path.0.stream());
+            }
+            BpafInner::Generate(gen) => {
+                custom_name = Some(gen.name.content.clone());
+            }
+            BpafInner::Private(_) => {
+                private = true;
+            }
+            BpafInner::Boxed(_) => {
+                boxed = true;
+            }
+            BpafInner::IgnoreRustdoc(_) => {
+                ignore_rustdoc = true;
+            }
+
+            // Options mode attributes
+            BpafInner::Descr(d) => {
+                with_options(&mut options, |opts| {
+                    opts.descr = Some(Help::Custom(d.expr.0.stream()));
+                });
+            }
+            BpafInner::Footer(f) => {
+                with_options(&mut options, |opts| {
+                    opts.footer = Some(Help::Custom(f.expr.0.stream()));
+                });
+            }
+            BpafInner::Header(h) => {
+                with_options(&mut options, |opts| {
+                    opts.header = Some(Help::Custom(h.expr.0.stream()));
+                });
+            }
+            BpafInner::Usage(u) => {
+                with_options(&mut options, |opts| opts.usage = Some(u.expr.0.stream()));
+            }
+            BpafInner::Version(v) => {
+                with_options(&mut options, |opts| opts.version = Some(v.expr.0.stream()));
+            }
+            BpafInner::MaxWidth(mw) => {
+                with_options(&mut options, |opts| {
+                    opts.max_width = Some(mw.expr.0.stream())
+                });
+            }
+            BpafInner::CargoHelper(ch) => {
+                with_options(&mut options, |opts| {
+                    opts.cargo_helper = Some(ch.name.content.value().to_string());
+                });
+            }
+            BpafInner::FallbackToUsage(_) => {
+                with_options(&mut options, |opts| opts.fallback_usage = true);
+            }
+
+            // Command mode attributes (short, long, help for commands)
+            BpafInner::Short(s) => {
+                with_command(&mut command, |cmd| {
+                    if let Some(ch) = &s.ch {
+                        cmd.short.push(ch.content.value());
+                    }
+                });
+            }
+            BpafInner::Long(l) => {
+                with_command(&mut command, |cmd| {
+                    if let Some(name) = &l.name {
+                        // unsynn's LiteralString includes quotes, so strip them
+                        let val = name.content.value();
+                        let stripped = val.trim_matches('"');
+                        cmd.long.push(stripped.to_string());
+                    }
+                });
+            }
+            BpafInner::Help(h) => {
+                with_command(&mut command, |cmd| {
+                    // unsynn's LiteralString includes quotes, so strip them
+                    let val = h.text.content.value();
+                    let stripped = val.trim_matches('"');
+                    cmd.help = Some(Help::Doc(stripped.to_string()));
+                });
+            }
+
+            // PostDecor attributes at struct/enum level
+            BpafInner::Guard(gi) => {
+                let stream = gi.args.0.stream();
+                let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+                let (check, msg) = if let Ok(two_args) = iter.parse::<crate::parsing::TwoArgs>() {
+                    two_args.into_streams()
+                } else {
+                    (stream.clone(), proc_macro2::TokenStream::new())
+                };
+                top_attrs.push(Post::Decor(PostDecor::Guard { check, msg }));
+            }
+            BpafInner::Hide(_) => {
+                top_attrs.push(Post::Decor(PostDecor::Hide));
+            }
+            BpafInner::HideUsage(_) => {
+                top_attrs.push(Post::Decor(PostDecor::HideUsage));
+            }
+            BpafInner::CustomUsage(cu) => {
+                top_attrs.push(Post::Decor(PostDecor::CustomUsage {
+                    usage: cu.text.0.stream(),
+                }));
+            }
+            BpafInner::FallbackWith(fw) => {
+                top_attrs.push(Post::Decor(PostDecor::FallbackWith {
+                    f: fw.func.0.stream(),
+                }));
+            }
+            BpafInner::GroupHelp(gh) => {
+                with_parser(&mut parser, |p| {
+                    p.group_help = Some(Help::Custom(gh.text.0.stream()));
+                });
+            }
+            BpafInner::Complete(c) => {
+                top_attrs.push(Post::Decor(PostDecor::Complete {
+                    f: c.func.0.stream(),
+                }));
+            }
+            BpafInner::Group(g) => {
+                top_attrs.push(Post::Decor(PostDecor::CompleteGroup {
+                    group: g.name.content.value().to_string(),
+                }));
+            }
+            _ => {}
         }
-        _ => {}
+
+        first = false;
     }
 
-    Ok(None)
+    // Construct Mode from parsed configurations
+    let mode = match (options, command) {
+        (Some(options), Some(command)) => Mode::Command { command, options },
+        (Some(options), None) => Mode::Options { options },
+        _ => Mode::Parser {
+            parser: parser.unwrap_or_default(),
+        },
+    };
+
+    Ok(Some(TopInfo {
+        adjacent,
+        mode,
+        fallback,
+        bpaf_path,
+        custom_name,
+        private,
+        boxed,
+        ignore_rustdoc,
+        attrs: top_attrs,
+    }))
 }
 
 impl Parser for Top {
     fn parser(input: &mut TokenIter) -> Result<Self> {
-        // Collect struct-level attributes (look for #[bpaf(...)])
-        let mut attrs_groups = Vec::new();
+        use crate::parsing::*;
+
+        // Collect struct-level attributes using unsynn grammar
+        let mut bpaf_attrs = Vec::new();
+        let mut doc_comments = Vec::new();
         loop {
-            let attr = input.transaction(|t| {
-                if let Some(TokenTree::Punct(ref p)) = t.next() {
-                    if p.as_char() == '#' {
-                        // Get the group after #
-                        if let Some(TokenTree::Group(ref g)) = t.next() {
-                            return Ok(Some(g.clone()));
-                        }
+            let attr_result = input.transaction(|t| {
+                let _: Pound = t.parse()?;
+                let attr_group: BracketGroupContaining<Attribute> = t.parse()?;
+
+                match attr_group.content {
+                    Attribute::Bpaf(bpaf_attr) => {
+                        bpaf_attrs.push(bpaf_attr);
+                    }
+                    Attribute::Doc(doc_inner) => {
+                        doc_comments.push(doc_inner);
+                    }
+                    Attribute::Other(_) => {
+                        // Ignore other attributes
                     }
                 }
-                Err(Error::no_error())
+                Ok(())
             });
-
-            match attr {
-                Ok(Some(g)) => attrs_groups.push(g),
-                _ => break,
+            if attr_result.is_err() {
+                break;
             }
         }
 
-        // Parse struct-level attributes
+        // Parse struct-level attributes from parsed BpafAttr structures
         let mut adjacent = false;
         let mut mode = Mode::default();
-        for group in &attrs_groups {
-            if let Some(attrs) = parse_struct_attrs(group)? {
+        let mut fallback = None;
+        let mut bpaf_path = None;
+        let mut custom_name = None;
+        let mut private = false;
+        let mut boxed = false;
+        let mut ignore_rustdoc = false;
+        let mut top_attrs = Vec::new();
+        for bpaf_attr in &bpaf_attrs {
+            if let Some(attrs) = parse_struct_attrs(bpaf_attr)? {
                 if attrs.adjacent {
                     adjacent = true;
                 }
-                if let Some(m) = attrs.mode {
-                    mode = m;
+                // Always take the mode from parsed attributes
+                mode = attrs.mode;
+                if attrs.ignore_rustdoc {
+                    ignore_rustdoc = true;
+                }
+                top_attrs.extend(attrs.attrs);
+                if let Some(fb) = attrs.fallback {
+                    fallback = Some(fb);
+                }
+                if let Some(bp) = attrs.bpaf_path {
+                    bpaf_path = Some(bp);
+                }
+                if let Some(cn) = attrs.custom_name {
+                    custom_name = Some(cn);
+                }
+                if attrs.private {
+                    private = true;
+                }
+                if attrs.boxed {
+                    boxed = true;
+                }
+            }
+        }
+
+        // Apply struct-level doc comments if ignore_rustdoc is false
+        if !ignore_rustdoc && !doc_comments.is_empty() {
+            // Split and apply based on mode
+            match &mut mode {
+                Mode::Options { options } => {
+                    split_options_help(&doc_comments, options);
+                }
+                Mode::Command { options, .. } => {
+                    split_options_help(&doc_comments, options);
+                }
+                Mode::Parser { parser } => {
+                    // Parser mode uses all doc comments joined as group_help
+                    if parser.group_help.is_none() {
+                        let (first, second, rest) = parse_doc_paragraphs(&doc_comments);
+                        let mut parts = Vec::new();
+                        if let Some(f) = first {
+                            parts.push(f);
+                        }
+                        if let Some(s) = second {
+                            parts.push(s);
+                        }
+                        if let Some(r) = rest {
+                            parts.push(r);
+                        }
+                        let doc_text = parts.join("\n");
+                        parser.group_help = Some(crate::help::Help::Doc(doc_text));
+                    }
                 }
             }
         }
 
         // Try to skip visibility modifier if present
-        let _ = input.transaction(|t| {
-            let ident: Ident = t.parse()?;
-            if ident == "pub" {
-                Ok(())
-            } else {
-                Err(Error::no_error())
-            }
-        });
+        let _ = input.parse::<crate::parsing::Visibility>();
 
         // Expect "struct" or "enum" keyword
         let keyword: Ident = input.parse()?;
@@ -364,7 +839,18 @@ impl Parser for Top {
                     };
                     // Consume remaining tokens (semicolon, etc.)
                     while input.next().is_some() {}
-                    return Ok(Top { name, body, adjacent, mode });
+                    return Ok(Top {
+                        name,
+                        body,
+                        adjacent,
+                        mode,
+                        fallback,
+                        bpaf_path,
+                        custom_name,
+                        private,
+                        boxed,
+                        attrs: top_attrs,
+                    });
                 }
                 None => {
                     // End of input - return with empty body
@@ -373,7 +859,18 @@ impl Parser for Top {
                     } else {
                         Body::Struct(Vec::new())
                     };
-                    return Ok(Top { name, body, adjacent, mode });
+                    return Ok(Top {
+                        name,
+                        body,
+                        adjacent,
+                        mode,
+                        fallback,
+                        bpaf_path,
+                        custom_name,
+                        private,
+                        boxed,
+                        attrs: top_attrs,
+                    });
                 }
                 _ => {
                     // Continue looking for the brace group
@@ -388,35 +885,91 @@ impl ToTokens for Top {
         let name = &self.name;
 
         // Generate parser function
-        let mut parser_body = self.generate_parser_body();
+        let mut parser_body = self.emit_body();
+
+        // Apply fallback if specified (must be before mode wrappers)
+        if let Some(ref fallback_expr) = self.fallback {
+            parser_body = quote! { #parser_body.fallback(#fallback_expr) };
+        }
+
+        // Apply top-level PostDecor attributes (guard, hide, etc.)
+        for attr in &self.attrs {
+            parser_body = self.apply_post(parser_body, attr);
+        }
+
+        // Apply .boxed() if requested (must be before .to_options())
+        if self.boxed {
+            parser_body = quote! { #parser_body.boxed() };
+        }
+
+        // Get the bpaf crate path
+        let bpaf = self.bpaf_crate();
 
         // Apply mode-specific wrappers
-        match self.mode {
-            Mode::Options => {
+        match &self.mode {
+            Mode::Options { options } => {
                 // Add .to_options()
                 parser_body = quote! { #parser_body.to_options() };
+                // Apply options configuration
+                parser_body = self.apply_options_cfg(parser_body, options, &bpaf);
             }
-            Mode::Command => {
-                // Add .to_options().command("name")
-                let name_lower = name.to_string().to_lowercase();
-                parser_body = quote! { #parser_body.to_options().command(#name_lower) };
+            Mode::Command { command, options } => {
+                // Add .to_options() first
+                parser_body = quote! { #parser_body.to_options() };
+                // Apply options configuration BEFORE calling .command()
+                parser_body = self.apply_options_cfg(parser_body, options, &bpaf);
+                // Then add .command("name")
+                // ParseCommand<T> implements Parser<T> so we can return it as impl Parser<T>
+                let default_name = name.to_string().to_lowercase();
+                let cmd_name = command.name.as_deref().unwrap_or(&default_name);
+                parser_body = quote! { #parser_body.command(#cmd_name) };
+
+                // Apply command aliases (short, long, help)
+                for short_char in &command.short {
+                    parser_body = quote! { #parser_body.short(#short_char) };
+                }
+                for long_name in &command.long {
+                    parser_body = quote! { #parser_body.long(#long_name) };
+                }
+                if let Some(ref help) = command.help {
+                    parser_body = quote! { #parser_body.help(#help) };
+                }
             }
-            Mode::Parser => {
-                // No wrapper needed
+            Mode::Parser { parser: parser_cfg } => {
+                // Apply parser configuration (group_help)
+                if let Some(ref group_help) = parser_cfg.group_help {
+                    parser_body = quote! { #parser_body.group_help(#group_help) };
+                }
             }
         }
 
-        // Generate return type based on mode
-        let return_type = match self.mode {
-            Mode::Options => quote! { ::bpaf::OptionParser<Self> },
-            Mode::Parser | Mode::Command => quote! { impl ::bpaf::Parser<Self> },
+        // Generate return type based on mode (boxed changes return type for parser mode)
+        let return_type = match (&self.mode, self.boxed) {
+            (Mode::Options { .. }, _) => quote! { #bpaf::OptionParser<Self> },
+            (Mode::Command { .. }, true) | (Mode::Parser { .. }, true) => {
+                quote! { Box<dyn #bpaf::Parser<Self>> }
+            }
+            (Mode::Command { .. }, false) | (Mode::Parser { .. }, false) => {
+                quote! { impl #bpaf::Parser<Self> }
+            }
+        };
+
+        // Determine function name
+        let default_fn_name = quote::format_ident!("parse");
+        let fn_name = self.custom_name.as_ref().unwrap_or(&default_fn_name);
+
+        // Determine visibility
+        let visibility = if self.private {
+            quote! {}
+        } else {
+            quote! { pub }
         };
 
         tokens.extend(quote! {
             #[allow(unused_imports)]
             impl #name {
-                pub fn parse() -> #return_type {
-                    use ::bpaf::Parser as _;
+                #visibility fn #fn_name() -> #return_type {
+                    use #bpaf::Parser as _;
                     #parser_body
                 }
             }
@@ -425,28 +978,83 @@ impl ToTokens for Top {
 }
 
 impl Top {
-    /// Generate the parser body based on fields or variants
-    fn generate_parser_body(&self) -> TokenStream {
-        match &self.body {
-            Body::Struct(fields) => self.generate_struct_parser(fields),
-            Body::Enum(variants) => self.generate_enum_parser(variants),
+    /// Get the bpaf crate path to use (either custom or default ::bpaf)
+    fn bpaf_crate(&self) -> TokenStream {
+        if let Some(ref custom_path) = self.bpaf_path {
+            custom_path.clone()
+        } else {
+            quote! { ::bpaf }
         }
     }
 
-    /// Generate parser for a struct
-    fn generate_struct_parser(&self, fields: &[Field]) -> TokenStream {
+    /// Apply OptionsCfg configuration to the parser
+    fn apply_options_cfg(
+        &self,
+        mut parser: TokenStream,
+        cfg: &crate::mode::OptionsCfg,
+        bpaf: &TokenStream,
+    ) -> TokenStream {
+        // Apply descr
+        if let Some(ref descr) = cfg.descr {
+            parser = quote! { #parser.descr(#descr) };
+        }
+        // Apply footer
+        if let Some(ref footer) = cfg.footer {
+            parser = quote! { #parser.footer(#footer) };
+        }
+        // Apply header
+        if let Some(ref header) = cfg.header {
+            parser = quote! { #parser.header(#header) };
+        }
+        // Apply usage
+        if let Some(ref usage) = cfg.usage {
+            parser = quote! { #parser.usage(#usage) };
+        }
+        // Apply version
+        if let Some(ref version) = cfg.version {
+            parser = quote! { #parser.version(#version) };
+        }
+        // Apply max_width
+        if let Some(ref max_width) = cfg.max_width {
+            parser = quote! { #parser.max_width(#max_width) };
+        }
+        // Apply fallback_usage
+        if cfg.fallback_usage {
+            parser = quote! { #parser.fallback_to_usage() };
+        }
+        // Apply cargo_helper (wraps the whole thing)
+        if let Some(ref cargo_helper) = cfg.cargo_helper {
+            parser = quote! {
+                #bpaf::cargo_helper(#cargo_helper, #parser)
+            };
+        }
+        parser
+    }
+
+    /// Emit the parser body based on fields or variants
+    fn emit_body(&self) -> TokenStream {
+        match &self.body {
+            Body::Struct(fields) => self.emit_struct(fields),
+            Body::Enum(variants) => self.emit_enum(variants),
+        }
+    }
+
+    /// Emit tokens for a struct parser
+    fn emit_struct(&self, fields: &[StructField]) -> TokenStream {
+        let bpaf = self.bpaf_crate();
+
         if fields.is_empty() {
             // Empty struct - return a pure value
             let name = &self.name;
             return quote! {
-                ::bpaf::pure(#name {})
+                #bpaf::pure(#name {})
             };
         }
 
         // Generate parsers for each field
         let field_parsers: Vec<TokenStream> = fields
             .iter()
-            .map(|field| self.generate_field_parser(field))
+            .map(|field| self.emit_field(field))
             .collect();
 
         // Generate field names for construction
@@ -459,7 +1067,7 @@ impl Top {
         let construct = quote! {
             {
                 #( let #field_names = #field_parsers; )*
-                ::bpaf::construct!(#name { #( #field_names_construct ),* })
+                #bpaf::construct!(#name { #( #field_names_construct ),* })
             }
         };
 
@@ -471,43 +1079,107 @@ impl Top {
         }
     }
 
-    /// Generate parser for an enum (command-style)
-    fn generate_enum_parser(&self, variants: &[EnumVariant]) -> TokenStream {
+    /// Emit tokens for an enum parser
+    fn emit_enum(&self, variants: &[EnumBranch]) -> TokenStream {
+        let bpaf = self.bpaf_crate();
         let enum_name = &self.name;
 
-        // Generate parser for each variant
+        // Check if any variant is a command
+        let has_commands = variants.iter().any(|v| v.is_command);
+
+        // Generate parser for each variant (skip variants with skip=true)
         let variant_parsers: Vec<TokenStream> = variants
             .iter()
+            .filter(|v| !v.skip)
             .map(|variant| {
                 let variant_name = &variant.name;
-                let command_name = to_kebab_case(&variant_name.to_string());
+                let command_name = variant.command_name.clone().unwrap_or_else(|| to_kebab_case(&variant_name.to_string()));
 
-                if variant.fields.is_empty() {
-                    // Unit variant - simple command
-                    quote! {
-                        ::bpaf::command(
-                            #command_name,
-                            ::bpaf::pure(#enum_name::#variant_name).to_options()
-                        )
-                    }
+                // Get help text from doc comments
+                let help_text = if !variant.doc_comments.is_empty() {
+                    Some(variant.doc_comments.join("\n"))
                 } else {
-                    // Variant with fields - construct from fields
-                    let field_parsers: Vec<TokenStream> = variant.fields
-                        .iter()
-                        .map(|field| self.generate_field_parser(field))
-                        .collect();
+                    None
+                };
 
-                    let field_names: Vec<&Ident> = variant.fields.iter().map(|f| &f.name).collect();
-                    let field_names_construct = field_names.clone();
+                if has_commands && variant.is_command {
+                    // Command-based variant
+                    if variant.fields.is_empty() {
+                        // Unit variant - simple command
+                        let base = quote! {
+                            #bpaf::pure(#enum_name::#variant_name).to_options()
+                        };
+                        apply_command_modifiers(base, help_text, variant, &command_name)
+                    } else {
+                        // Variant with fields - construct from fields
+                        let field_parsers: Vec<TokenStream> = variant.fields
+                            .iter()
+                            .map(|field| self.emit_field(field))
+                            .collect();
 
-                    quote! {
-                        ::bpaf::command(
-                            #command_name,
+                        let field_names: Vec<&Ident> = variant.fields.iter().map(|f| &f.name).collect();
+                        let field_names_construct = field_names.clone();
+
+                        let construct = if variant.is_tuple {
+                            // Tuple variant: Variant(field_0, field_1, ...)
+                            quote! {
+                                #bpaf::construct!(#enum_name::#variant_name( #( #field_names_construct ),* ))
+                            }
+                        } else {
+                            // Struct variant: Variant { field1, field2, ... }
+                            quote! {
+                                #bpaf::construct!(#enum_name::#variant_name { #( #field_names_construct ),* })
+                            }
+                        };
+
+                        let base = quote! {
                             {
                                 #( let #field_names = #field_parsers; )*
-                                ::bpaf::construct!(#enum_name::#variant_name { #( #field_names_construct ),* })
+                                #construct
                             }.to_options()
-                        )
+                        };
+                        apply_command_modifiers(base, help_text, variant, &command_name)
+                    }
+                } else {
+                    // Regular flag-based variant (no command attribute)
+                    if variant.fields.is_empty() {
+                        // Unit variant - use long/short flags
+                        let base = quote! {
+                            #bpaf::long(#command_name).req_flag(#enum_name::#variant_name)
+                        };
+                        if let Some(help) = help_text {
+                            quote! { #base.help(#help) }
+                        } else {
+                            base
+                        }
+                    } else {
+                        // Variant with fields - construct from fields
+                        let field_parsers: Vec<TokenStream> = variant.fields
+                            .iter()
+                            .map(|field| self.emit_field(field))
+                            .collect();
+
+                        let field_names: Vec<&Ident> = variant.fields.iter().map(|f| &f.name).collect();
+                        let field_names_construct = field_names.clone();
+
+                        let construct = if variant.is_tuple {
+                            // Tuple variant: Variant(field_0, field_1, ...)
+                            quote! {
+                                #bpaf::construct!(#enum_name::#variant_name( #( #field_names_construct ),* ))
+                            }
+                        } else {
+                            // Struct variant: Variant { field1, field2, ... }
+                            quote! {
+                                #bpaf::construct!(#enum_name::#variant_name { #( #field_names_construct ),* })
+                            }
+                        };
+
+                        quote! {
+                            {
+                                #( let #field_names = #field_parsers; )*
+                                #construct
+                            }
+                        }
                     }
                 }
             })
@@ -515,7 +1187,7 @@ impl Top {
 
         // Combine variants - generate named parsers and combine with construct!
         if variant_parsers.is_empty() {
-            quote! { ::bpaf::fail("No variants available") }
+            quote! { #bpaf::fail("No variants available") }
         } else {
             // Generate variable names for each variant parser
             let var_names: Vec<Ident> = (0..variant_parsers.len())
@@ -529,19 +1201,21 @@ impl Top {
             quote! {
                 {
                     #( let #var_names_bind = #parsers_iter; )*
-                    ::bpaf::construct!( [ #( #var_names_construct ),* ] )
+                    #bpaf::construct!( [ #( #var_names_construct ),* ] )
                 }
             }
         }
     }
 
-    /// Generate parser for a single field based on its shape
-    fn generate_field_parser(&self, field: &Field) -> TokenStream {
+    /// Emit tokens for a field's parser
+    fn emit_field(&self, field: &StructField) -> TokenStream {
+        let bpaf = self.bpaf_crate();
         let field_name = &field.name;
         let field_name_str = field_name.to_string();
 
         // Determine the names to use based on attributes
-        let (short_spec, long_spec) = self.get_name_specs(field);
+        let short_spec = field.attrs.short;
+        let long_spec = field.attrs.long.as_ref();
         let env_spec = &field.attrs.env;
 
         // Check for explicit consumer type or use shape-based default
@@ -549,21 +1223,34 @@ impl Top {
 
         // Build the base parser with names (for named parsers)
         // If only env is specified (no short/long), we'll use None and handle it later
+        // For Any/Positional consumers without names, we also use None (they're standalone)
         let mut base_parser = if let Some(short) = short_spec {
             if let Some(long) = long_spec {
                 // Both short and long
-                Some(quote! { ::bpaf::short(#short).long(#long) })
+                Some(quote! { #bpaf::short(#short).long(#long) })
             } else {
                 // Just short
-                Some(quote! { ::bpaf::short(#short) })
+                Some(quote! { #bpaf::short(#short) })
             }
         } else if let Some(long) = long_spec {
             // Just long
-            Some(quote! { ::bpaf::long(#long) })
+            Some(quote! { #bpaf::long(#long) })
         } else if env_spec.is_none() {
-            // Neither short/long/env specified - default to long name derived from field
-            let default_long = to_kebab_case(&field_name_str);
-            Some(quote! { ::bpaf::long(#default_long) })
+            // Neither short/long/env specified
+            // Check if this is a standalone Any or Positional consumer
+            let is_standalone = matches!(
+                consumer,
+                Some(ConsumerType::Any { .. }) | Some(ConsumerType::Positional { .. })
+            );
+
+            if !is_standalone {
+                // Default to long name derived from field
+                let default_long = to_kebab_case(&field_name_str);
+                Some(quote! { #bpaf::long(#default_long) })
+            } else {
+                // Standalone Any/Positional - no base parser
+                None
+            }
         } else {
             // Only env specified - will use argument() directly
             None
@@ -571,9 +1258,9 @@ impl Top {
 
         // Handle env-only fields (no short/long)
         if base_parser.is_none() && env_spec.is_some() {
-            // Use ::bpaf::env() directly for env-only fields
+            // Use #bpaf::env() directly for env-only fields
             let env_expr = env_spec.as_ref().unwrap();
-            base_parser = Some(quote! { ::bpaf::env(#env_expr) });
+            base_parser = Some(quote! { #bpaf::env(#env_expr) });
         } else if let Some(ref env_expr) = env_spec {
             // Chain .env() onto existing short/long parser
             if let Some(bp) = base_parser {
@@ -581,95 +1268,111 @@ impl Top {
             }
         }
 
-        // Unwrap base_parser (should always be Some at this point)
-        let base_parser = base_parser.unwrap();
-
         // Generate base parser based on consumer type or shape
         let mut parser = match consumer {
-            Some(ConsumerType::Switch) => {
-                quote! { #base_parser.switch() }
-            }
-            Some(ConsumerType::Argument { metavar }) => {
-                // Use inner type for Vec/Option shapes, otherwise use field type
-                let ty = match field.shape {
-                    Shape::Vec | Shape::Option => &field.inner_ty,
-                    _ => &field.ty,
-                };
-                let metavar_str = metavar.as_deref().unwrap_or(&field_name_str);
-                quote! { #base_parser.argument::<#ty>(#metavar_str) }
-            }
-            Some(ConsumerType::Positional { metavar }) => {
-                // Use inner type for Vec/Option shapes, otherwise use field type
-                let ty = match field.shape {
-                    Shape::Vec | Shape::Option => &field.inner_ty,
-                    _ => &field.ty,
-                };
-                let metavar_str = metavar.as_deref().unwrap_or("ARG");
-                quote! { ::bpaf::positional::<#ty>(#metavar_str) }
-            }
-            Some(ConsumerType::Flag { present, absent }) => {
-                quote! { #base_parser.flag(#present, #absent) }
-            }
-            Some(ConsumerType::ReqFlag { present }) => {
-                quote! { #base_parser.req_flag(#present) }
-            }
-            Some(ConsumerType::Any { metavar, ty, check }) => {
-                // If we have short/long/env, chain with base_parser
-                // Otherwise use standalone any()
-                if field.attrs.short.is_some() || field.attrs.long.is_some() || field.attrs.env.is_some() {
-                    // Use base_parser.argument().parse() for named parsers
-                    // Wrap the check function to convert Option to Result
-                    quote! {
-                        #base_parser.argument::<String>(#metavar).parse(|s: String| {
-                            (#check)(s).ok_or("validation failed")
-                        })
-                    }
+            // Handle standalone Positional first (when base_parser is None)
+            Some(ConsumerType::Positional { metavar }) if base_parser.is_none() => {
+                let ty = if field.shape.is_multiple() || field.shape.is_optional() {
+                    field.shape.inner_type()
                 } else {
-                    // Use standalone any() for positional
-                    if let Some(ty) = ty {
-                        // With explicit type: any::<Type, _, _>(metavar, check)
-                        quote! { ::bpaf::any::<#ty, _, _>(#metavar, #check) }
-                    } else {
-                        // Without type: any(metavar, check)
-                        quote! { ::bpaf::any(#metavar, #check) }
-                    }
+                    field.ty.clone()
+                };
+                let metavar_str = metavar.as_deref().unwrap_or(DEFAULT_POSITIONAL_METAVAR);
+                quote! { #bpaf::positional::<#ty>(#metavar_str) }
+            }
+
+            // Handle standalone Any first (when base_parser is None)
+            Some(ConsumerType::Any { metavar, ty, check }) if base_parser.is_none() => {
+                if let Some(ty) = ty {
+                    // With explicit type: any::<Type, _, _>(metavar, check)
+                    quote! { #bpaf::any::<#ty, _, _>(#metavar, #check) }
+                } else {
+                    // Without type: any(metavar, check)
+                    quote! { #bpaf::any(#metavar, #check) }
                 }
             }
-            Some(ConsumerType::External { ident }) => {
-                if let Some(ref path) = ident {
-                    quote! { #path() }
-                } else {
-                    // Use default based on field name
-                    let fn_name = &field.name;
-                    quote! { #fn_name() }
-                }
-            }
-            Some(ConsumerType::Pure { expr }) => {
-                quote! { ::bpaf::pure(#expr) }
-            }
-            Some(ConsumerType::PureWith { expr }) => {
-                quote! { ::bpaf::pure_with(#expr) }
-            }
-            None => {
-                // Infer from shape
-                match field.shape {
-                    Shape::Bool => {
+
+            // All other cases need base_parser
+            _ => {
+                let base_parser =
+                    base_parser.expect("base_parser should be Some for named consumers");
+
+                match consumer {
+                    Some(ConsumerType::Switch) => {
                         quote! { #base_parser.switch() }
                     }
-                    Shape::Direct => {
-                        let ty = &field.ty;
-                        quote! { #base_parser.argument::<#ty>(#field_name_str) }
+                    Some(ConsumerType::Argument { metavar }) => {
+                        // Use inner type for Vec/Option shapes, otherwise use field type
+                        let ty = if field.shape.is_multiple() || field.shape.is_optional() {
+                            field.shape.inner_type()
+                        } else {
+                            field.ty.clone()
+                        };
+                        let metavar_str = metavar.as_deref().unwrap_or(&field_name_str);
+                        quote! { #base_parser.argument::<#ty>(#metavar_str) }
                     }
-                    Shape::Option => {
-                        let inner_ty = &field.inner_ty;
-                        quote! { #base_parser.argument::<#inner_ty>(#field_name_str) }
+                    Some(ConsumerType::Positional { metavar }) => {
+                        // Named positional (rare, but possible with short/long)
+                        let ty = if field.shape.is_multiple() || field.shape.is_optional() {
+                            field.shape.inner_type()
+                        } else {
+                            field.ty.clone()
+                        };
+                        let metavar_str = metavar.as_deref().unwrap_or(DEFAULT_POSITIONAL_METAVAR);
+                        quote! { #base_parser.argument::<#ty>(#metavar_str) }
                     }
-                    Shape::Vec => {
-                        let inner_ty = &field.inner_ty;
-                        quote! { #base_parser.argument::<#inner_ty>(#field_name_str) }
+                    Some(ConsumerType::Flag { present, absent }) => {
+                        quote! { #base_parser.flag(#present, #absent) }
                     }
-                    Shape::Unit => {
-                        quote! { ::bpaf::pure(()) }
+                    Some(ConsumerType::ReqFlag { present }) => {
+                        quote! { #base_parser.req_flag(#present) }
+                    }
+                    Some(ConsumerType::Any {
+                        metavar,
+                        ty: _,
+                        check,
+                    }) => {
+                        // Named any - use base_parser.argument().parse()
+                        quote! {
+                            #base_parser.argument::<String>(#metavar).parse(|s: String| {
+                                (#check)(s).ok_or("validation failed")
+                            })
+                        }
+                    }
+                    Some(ConsumerType::External { ident }) => {
+                        if let Some(ref path) = ident {
+                            quote! { #path() }
+                        } else {
+                            // Use default based on field name
+                            let fn_name = &field.name;
+                            quote! { #fn_name() }
+                        }
+                    }
+                    Some(ConsumerType::Pure { expr }) => {
+                        quote! { #bpaf::pure(#expr) }
+                    }
+                    Some(ConsumerType::PureWith { expr }) => {
+                        quote! { #bpaf::pure_with(#expr) }
+                    }
+                    None => {
+                        // Infer from shape
+                        match &field.shape {
+                            TypeShape::Bool => {
+                                quote! { #base_parser.switch() }
+                            }
+                            TypeShape::Direct(ty) => {
+                                quote! { #base_parser.argument::<#ty>(#field_name_str) }
+                            }
+                            TypeShape::Optional(inner_ty) => {
+                                quote! { #base_parser.argument::<#inner_ty>(#field_name_str) }
+                            }
+                            TypeShape::Multiple(inner_ty) => {
+                                quote! { #base_parser.argument::<#inner_ty>(#field_name_str) }
+                            }
+                            TypeShape::Unit => {
+                                quote! { #bpaf::pure(()) }
+                            }
+                        }
                     }
                 }
             }
@@ -697,19 +1400,28 @@ impl Top {
 
         // Determine if we need implicit PostParse attributes
         // Only add implicit .optional() or .many() if there are NO explicit PostParse attributes
-        let has_explicit_postparse = field.attrs.postpr.iter().any(|p| matches!(p, Post::Parse(_)));
+        let has_explicit_postparse = field
+            .attrs
+            .postpr
+            .iter()
+            .any(|p| matches!(p, Post::Parse(_)));
 
         // Build list of PostParse attributes to apply
         let mut postpr_to_apply = field.attrs.postpr.clone();
 
-        if !has_explicit_postparse {
-            // Add implicit PostParse attributes based on type shape
-            let is_positional = matches!(consumer, Some(ConsumerType::Positional { .. }));
+        // Don't apply implicit post-processing for Pure or PureWith - they specify exact values
+        let is_pure = matches!(
+            consumer,
+            Some(ConsumerType::Pure { .. }) | Some(ConsumerType::PureWith { .. })
+        );
 
-            if field.shape == Shape::Option && !is_positional {
+        if !has_explicit_postparse && !is_pure {
+            // Add implicit PostParse attributes based on type shape
+            if field.shape.is_optional() {
                 // Insert implicit .optional() at position 0
+                // This works for both positional and named arguments
                 postpr_to_apply.insert(0, Post::Parse(PostParse::Optional));
-            } else if field.shape == Shape::Vec {
+            } else if field.shape.is_multiple() {
                 // Insert implicit .many() at position 0
                 postpr_to_apply.insert(0, Post::Parse(PostParse::Many));
             }
@@ -721,35 +1433,6 @@ impl Top {
         }
 
         parser
-    }
-
-    /// Get the short and long name specifications from attributes
-    fn get_name_specs(&self, field: &Field) -> (Option<char>, Option<String>) {
-        let field_name_str = field.name.to_string();
-
-        let short = if let Some(ch) = field.attrs.short {
-            // If short char is 'x' (placeholder), derive from field name
-            if ch == 'x' {
-                Some(field_name_str.chars().next().unwrap_or('x'))
-            } else {
-                Some(ch)
-            }
-        } else {
-            None
-        };
-
-        let long = if let Some(ref name) = field.attrs.long {
-            // If name is empty (placeholder), derive from field name
-            if name.is_empty() {
-                Some(to_kebab_case(&field_name_str))
-            } else {
-                Some(name.clone())
-            }
-        } else {
-            None
-        };
-
-        (short, long)
     }
 
     /// Apply a post-processing attribute to the parser
@@ -799,25 +1482,4 @@ impl Top {
             CompleteShell { f } => quote! { #parser.complete_shell(#f) },
         }
     }
-}
-
-/// Convert identifier to kebab-case
-/// Handles both snake_case and camelCase
-fn to_kebab_case(s: &str) -> String {
-    let mut result = String::new();
-    for (i, ch) in s.chars().enumerate() {
-        if ch == '_' {
-            // Convert underscore to hyphen
-            result.push('-');
-        } else if ch.is_uppercase() {
-            // Insert hyphen before uppercase letters (except at start)
-            if i > 0 {
-                result.push('-');
-            }
-            result.push(ch.to_ascii_lowercase());
-        } else {
-            result.push(ch);
-        }
-    }
-    result
 }

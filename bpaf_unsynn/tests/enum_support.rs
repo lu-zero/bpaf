@@ -6,8 +6,11 @@ use bpaf::Parser;
 #[derive(Debug, Clone, PartialEq)]
 #[derive(bpaf_unsynn::Bpaf)]
 enum Command {
+    #[bpaf(command)]
     Build,
+    #[bpaf(command)]
     Test,
+    #[bpaf(command)]
     Run,
 }
 
@@ -38,10 +41,12 @@ fn simple_enum_works() {
 #[derive(Debug, Clone, PartialEq)]
 #[derive(bpaf_unsynn::Bpaf)]
 enum Action {
+    #[bpaf(command)]
     Build {
         #[bpaf(long)]
         release: bool,
     },
+    #[bpaf(command)]
     Run {
         #[bpaf(long)]
         file: String,
@@ -75,13 +80,16 @@ fn enum_with_fields_works() {
 #[derive(Debug, Clone, PartialEq)]
 #[derive(bpaf_unsynn::Bpaf)]
 enum MixedCommand {
+    #[bpaf(command)]
     Init,
+    #[bpaf(command)]
     Deploy {
         #[bpaf(long)]
         target: String,
         #[bpaf(long)]
         verbose: bool,
     },
+    #[bpaf(command)]
     Status,
 }
 
