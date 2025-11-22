@@ -530,8 +530,11 @@ fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
                 options = Some(OptionsCfg::default());
                 parser = None;
             }
-            BpafInner::Command(_) if first => {
-                command = Some(CommandCfg::default());
+            BpafInner::Command(cmd) if first => {
+                command = Some(CommandCfg {
+                    name: cmd.name.as_ref().map(|g| g.content.as_str().to_string()),
+                    ..CommandCfg::default()
+                });
                 options = Some(OptionsCfg::default());
                 parser = None;
             }

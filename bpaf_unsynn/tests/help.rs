@@ -1,0 +1,198 @@
+//! Tests for help-related attributes
+//!
+//! Covers: doc comments, help attribute, version, header, footer, usage,
+//! descr (top-level), and help formatting
+
+
+// =============================================================================
+// Doc comments -> help text
+// =============================================================================
+
+/// A simple command with doc comments
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct DocComments {
+    /// Enable verbose output
+    verbose: bool,
+    /// The input file to process
+    input: String,
+}
+
+#[test]
+fn doc_comments_compile() {
+    let parser = DocComments::parse();
+
+    let r = parser.run_inner(&["--input", "test.txt"]).unwrap();
+    assert_eq!(r.input, "test.txt");
+}
+
+// =============================================================================
+// Help attribute (explicit)
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct HelpExplicit {
+    #[bpaf(long, help("Enable verbose mode for detailed output"))]
+    verbose: bool,
+}
+
+#[test]
+fn help_explicit_compiles() {
+    let parser = HelpExplicit::parse();
+    let r = parser.run_inner(&["--verbose"]).unwrap();
+    assert!(r.verbose);
+}
+
+// =============================================================================
+// Doc comment with help attribute combined
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct DocAndHelp {
+    /// This is the doc comment
+    #[bpaf(long, help("This is explicit help"))]
+    option: bool,
+}
+
+#[test]
+fn doc_and_help_combined() {
+    let parser = DocAndHelp::parse();
+    let r = parser.run_inner(&["--option"]).unwrap();
+    assert!(r.option);
+}
+
+// =============================================================================
+// Version attribute
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options, version)]
+struct WithVersion {
+    name: String,
+}
+
+#[test]
+fn version_compiles() {
+    let parser = WithVersion::parse();
+    let r = parser.run_inner(&["--name", "test"]).unwrap();
+    assert_eq!(r.name, "test");
+}
+
+/// Explicit version string
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options, version("1.2.3"))]
+struct ExplicitVersion {
+    name: String,
+}
+
+#[test]
+fn explicit_version_compiles() {
+    let parser = ExplicitVersion::parse();
+    let r = parser.run_inner(&["--name", "test"]).unwrap();
+    assert_eq!(r.name, "test");
+}
+
+// =============================================================================
+// Header and footer
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options, header("This appears before help"), footer("This appears after help"))]
+struct HeaderFooter {
+    value: String,
+}
+
+#[test]
+fn header_footer_compile() {
+    let parser = HeaderFooter::parse();
+    let r = parser.run_inner(&["--value", "test"]).unwrap();
+    assert_eq!(r.value, "test");
+}
+
+// =============================================================================
+// Usage attribute
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options, usage("CUSTOM USAGE STRING"))]
+struct CustomUsage {
+    value: String,
+}
+
+#[test]
+fn custom_usage_compiles() {
+    let parser = CustomUsage::parse();
+    let r = parser.run_inner(&["--value", "test"]).unwrap();
+    assert_eq!(r.value, "test");
+}
+
+// =============================================================================
+// Descr attribute (top-level description)
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options, descr("This is the program description"))]
+struct WithDescr {
+    value: String,
+}
+
+#[test]
+fn descr_compiles() {
+    let parser = WithDescr::parse();
+    let r = parser.run_inner(&["--value", "test"]).unwrap();
+    assert_eq!(r.value, "test");
+}
+
+// =============================================================================
+// Multiple help decorations combined
+// =============================================================================
+
+/// Program doc comment description
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options, version("2.0.0"), header("=== Header ==="), footer("=== Footer ==="))]
+struct FullyDecorated {
+    /// Enable verbose mode
+    #[bpaf(short, long)]
+    verbose: bool,
+    /// Input file path
+    #[bpaf(short('i'), long("input"))]
+    file: Option<String>,
+}
+
+#[test]
+fn fully_decorated_works() {
+    let parser = FullyDecorated::parse();
+
+    let r = parser.run_inner(&[]).unwrap();
+    assert!(!r.verbose);
+    assert_eq!(r.file, None);
+
+    let r = parser.run_inner(&["-v", "-i", "test.txt"]).unwrap();
+    assert!(r.verbose);
+    assert_eq!(r.file, Some("test.txt".to_string()));
+}
+
+// =============================================================================
+// Multi-line doc comments
+// =============================================================================
+
+/// This is a multi-line
+/// doc comment that spans
+/// several lines
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct MultiLineDoc {
+    /// First line of help
+    /// Second line of help
+    /// Third line of help
+    option: bool,
+}
+
+#[test]
+fn multi_line_doc_compiles() {
+    let parser = MultiLineDoc::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert!(!r.option);
+}
