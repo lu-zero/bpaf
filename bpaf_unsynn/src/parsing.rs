@@ -8,7 +8,7 @@ pub use unsynn::*;
 pub use proc_macro2::{Ident, TokenStream, TokenTree};
 
 // Type alias for the iterator type we use
-pub type TokenIter<'a> = unsynn::TokenIter<'a>;
+pub type TokenIter = unsynn::TokenIter;
 
 // Keywords we'll need for parsing structs and enums
 keyword! {
@@ -153,15 +153,10 @@ keyword! {
     pub KParser = "parser";
 }
 
-// Common operators
-operator! {
-    pub Comma = ",";
-    pub Colon = ":";
-    pub Semi = ";";
-    pub Eq = "=";
-    pub Lt = "<";
-    pub Gt = ">";
-}
+// Common operators - use predefined operators from unsynn
+pub use unsynn::operator::names::{Assign, Colon, Comma, Gt, Lt};
+// Alias for backward compatibility (Eq -> Assign)
+pub type Eq = Assign;
 
 // A token tree that properly handles `<...>` as a single unit (recursive).
 // Either `< ... >` containing more AngleTokenTrees, or a plain TokenTree.
@@ -784,13 +779,11 @@ impl TwoArgs {
     pub fn into_streams(self) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
         let first: proc_macro2::TokenStream = self
             .first
-            .0
             .into_iter()
             .map(|delimited| delimited.value.second) // Extract TokenTree from Cons<Except<Comma>, TokenTree>
             .collect();
         let second: proc_macro2::TokenStream = self
             .second
-            .0
             .into_iter()
             .map(|delimited| delimited.value)
             .collect();
@@ -808,7 +801,7 @@ impl AnyArgs {
     pub fn check_fn_tokens(&self) -> proc_macro2::TokenStream {
         use unsynn::ToTokens;
         let mut ts = proc_macro2::TokenStream::new();
-        for delimited in &self.check_fn.0 {
+        for delimited in self.check_fn.iter() {
             delimited.value.to_tokens(&mut ts);
         }
         ts

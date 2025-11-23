@@ -142,6 +142,7 @@ fn parse_two_args(
     match iter.parse::<crate::parsing::TwoArgs>() {
         Ok(two_args) => Ok(two_args.into_streams()),
         Err(_) => unsynn::Error::other(
+            None,
             &iter,
             format!(
                 "{}() requires exactly 2 comma-separated arguments ({})",
@@ -166,6 +167,7 @@ fn parse_any_args(group: &proc_macro2::Group) -> unsynn::Result<(String, TokenSt
             Ok((metavar, check))
         }
         Err(_) => unsynn::Error::other(
+            None,
             &iter,
             "any() requires a string literal for metavar and a check function: any(\"METAVAR\", check_fn)".to_string(),
         ),
@@ -198,7 +200,7 @@ impl FieldAttrs {
         // Process bpaf attributes (already parsed)
         for bpaf_attr in bpaf_attrs {
             // Iterate through the inner attributes
-            for delimited in &bpaf_attr.inner.content.0 {
+            for delimited in bpaf_attr.inner.content.iter() {
                 let inner = &delimited.value;
 
                 match inner {
@@ -421,7 +423,8 @@ impl FieldAttrs {
 
                     // Unknown attributes
                     BpafInner::Unknown(u) => {
-                        return unsynn::Error::unexpected_token(&u.to_token_iter());
+                        let mut iter = u.to_token_iter();
+                        return unsynn::Error::unexpected_token(iter.next(), &iter);
                     }
                 }
             }

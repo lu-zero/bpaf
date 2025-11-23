@@ -68,7 +68,7 @@ fn collect_attributes(iter: &mut TokenIter) -> (Vec<BpafAttr>, Vec<DocInner>) {
     let mut doc_comments = Vec::new();
 
     if let Some(attrs) = attrs {
-        for attr in attrs.0 {
+        for attr in attrs.into_iter() {
             match attr.value.second.content {
                 Attribute::Bpaf(bpaf_attr) => bpaf_attrs.push(bpaf_attr),
                 Attribute::Doc(doc_inner) => doc_comments.push(doc_inner),
@@ -150,7 +150,6 @@ fn parse_tuple_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
     let types: CommaDelimitedVec<VerbatimUntilComma> = iter.parse()?;
 
     let fields = types
-        .0
         .into_iter()
         .enumerate()
         .filter_map(|(field_index, delimited)| {
@@ -265,7 +264,7 @@ fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
 
     for bpaf_attr in attrs {
         // Access the inner DelimitedVec directly from the parsed structure
-        for delimited in &bpaf_attr.inner.content.0 {
+        for delimited in bpaf_attr.inner.content.iter() {
             match &delimited.value {
                 BpafInner::Command(cmd) => {
                     result.is_command = true;
@@ -529,7 +528,7 @@ fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
     let mut first = true;
 
     // Access the inner DelimitedVec directly from the parsed structure
-    for delimited in &bpaf_attr.inner.content.0 {
+    for delimited in bpaf_attr.inner.content.iter() {
         match &delimited.value {
             // Mode keywords (must be first)
             BpafInner::Options(_) if first => {

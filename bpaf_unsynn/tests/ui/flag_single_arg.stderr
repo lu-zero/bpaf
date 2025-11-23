@@ -1,4 +1,4 @@
-error: Parse error: flag() requires exactly 2 comma-separated arguments (present value, absent value)
+error: Parse error: Parser failed: expected (proc_macro2::TokenStream, proc_macro2::TokenStream), because flag() requires exactly 2 comma-separated arguments (present value, absent value), found None at None
  --> tests/ui/flag_single_arg.rs:3:24
   |
 3 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
