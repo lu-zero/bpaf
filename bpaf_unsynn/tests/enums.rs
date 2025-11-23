@@ -387,3 +387,98 @@ fn adjacent_command_variant() {
         }
     }
 }
+
+// =============================================================================
+// Command with short alias
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum ShortCmd {
+    /// Install packages
+    #[bpaf(command, short('i'))]
+    Install,
+    /// Remove packages
+    #[bpaf(command, short('r'))]
+    Remove,
+}
+
+#[test]
+fn command_with_short_alias() {
+    let parser = ShortCmd::parse();
+
+    // Primary command name
+    let r = parser.run_inner(&["install"]).unwrap();
+    assert_eq!(r, ShortCmd::Install);
+
+    // Short alias
+    let r = parser.run_inner(&["i"]).unwrap();
+    assert_eq!(r, ShortCmd::Install);
+
+    let r = parser.run_inner(&["r"]).unwrap();
+    assert_eq!(r, ShortCmd::Remove);
+}
+
+// =============================================================================
+// Command with hide
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum HiddenCmd {
+    /// Public command
+    #[bpaf(command)]
+    Public,
+    /// Internal command (hidden from help)
+    #[bpaf(command, hide)]
+    Internal,
+}
+
+#[test]
+fn hidden_command_still_works() {
+    let parser = HiddenCmd::parse();
+
+    let r = parser.run_inner(&["public"]).unwrap();
+    assert_eq!(r, HiddenCmd::Public);
+
+    // Hidden but still parseable
+    let r = parser.run_inner(&["internal"]).unwrap();
+    assert_eq!(r, HiddenCmd::Internal);
+}
+
+// =============================================================================
+// Command with fallback_to_usage
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum FallbackCmd {
+    /// Show help when args missing
+    #[bpaf(command, fallback_to_usage)]
+    Help {
+        #[bpaf(positional("TOPIC"))]
+        topic: String,
+    },
+    /// Normal command
+    #[bpaf(command)]
+    Run,
+}
+
+#[test]
+fn command_with_fallback_to_usage() {
+    let parser = FallbackCmd::parse();
+
+    // Normal command works
+    let r = parser.run_inner(&["run"]).unwrap();
+    assert_eq!(r, FallbackCmd::Run);
+
+    // Command with args works
+    let r = parser.run_inner(&["help", "topic"]).unwrap();
+    match r {
+        FallbackCmd::Help { topic } => assert_eq!(topic, "topic"),
+        _ => panic!("Expected Help variant"),
+    }
+
+    // fallback_to_usage makes missing args show usage instead of error
+    // We can't easily test the usage output, but we verify parsing works
+}
