@@ -3,6 +3,8 @@
 //! Covers: unit variants, tuple variants, struct variants, command variants,
 //! default variants, explicit commands, aliases, and mixed combinations
 
+use bpaf::Parser;
+
 // =============================================================================
 // Basic unit variant enum (flags)
 // =============================================================================
@@ -481,4 +483,108 @@ fn command_with_fallback_to_usage() {
 
     // fallback_to_usage makes missing args show usage instead of error
     // We can't easily test the usage output, but we verify parsing works
+}
+
+// =============================================================================
+// Enum with cargo_helper
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(cargo_helper("myenum"))]
+enum CargoCmd {
+    #[bpaf(command)]
+    Build,
+    #[bpaf(command)]
+    Test,
+}
+
+#[test]
+fn enum_with_cargo_helper() {
+    // cargo_helper returns impl Parser, needs .to_options()
+    let parser = CargoCmd::parse().to_options();
+
+    let r = parser.run_inner(&["build"]).unwrap();
+    assert_eq!(r, CargoCmd::Build);
+
+    let r = parser.run_inner(&["test"]).unwrap();
+    assert_eq!(r, CargoCmd::Test);
+}
+
+// =============================================================================
+// Command variant with doc comment help
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum CmdWithHelp {
+    /// First command help from doc comment
+    #[bpaf(command)]
+    First,
+    /// Second command help from doc comment
+    #[bpaf(command)]
+    Second,
+}
+
+#[test]
+fn command_with_doc_comment_help() {
+    let parser = CmdWithHelp::parse();
+
+    let r = parser.run_inner(&["first"]).unwrap();
+    assert_eq!(r, CmdWithHelp::First);
+
+    let r = parser.run_inner(&["second"]).unwrap();
+    assert_eq!(r, CmdWithHelp::Second);
+
+    // Verify help contains the doc comment help text
+    let help = parser.run_inner(&["--help"]).unwrap_err().unwrap_stdout();
+    assert!(
+        help.contains("First command help from doc comment"),
+        "Help should contain first command help: {}",
+        help
+    );
+    assert!(
+        help.contains("Second command help from doc comment"),
+        "Help should contain second command help: {}",
+        help
+    );
+}
+
+// =============================================================================
+// Enum with both short and long aliases on command
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum CmdWithBothAliases {
+    #[bpaf(command, short('i'), long("inst"))]
+    Install,
+    #[bpaf(command, short('u'), long("upgrade"))]
+    Update,
+}
+
+#[test]
+fn command_with_short_and_long_alias() {
+    let parser = CmdWithBothAliases::parse();
+
+    // Primary command name
+    let r = parser.run_inner(&["install"]).unwrap();
+    assert_eq!(r, CmdWithBothAliases::Install);
+
+    // Short alias
+    let r = parser.run_inner(&["i"]).unwrap();
+    assert_eq!(r, CmdWithBothAliases::Install);
+
+    // Long alias
+    let r = parser.run_inner(&["inst"]).unwrap();
+    assert_eq!(r, CmdWithBothAliases::Install);
+
+    // All three for Update
+    let r = parser.run_inner(&["update"]).unwrap();
+    assert_eq!(r, CmdWithBothAliases::Update);
+
+    let r = parser.run_inner(&["u"]).unwrap();
+    assert_eq!(r, CmdWithBothAliases::Update);
+
+    let r = parser.run_inner(&["upgrade"]).unwrap();
+    assert_eq!(r, CmdWithBothAliases::Update);
 }
