@@ -126,6 +126,31 @@ pub enum PostDecor {
     CompleteShell { f: TokenStream },
 }
 
+/// Helper function to parse and extract two comma-separated arguments
+/// The TwoArgs grammar requires exactly 2 non-empty arguments with a comma separator
+/// Returns an error if parsing fails (missing comma, empty arguments, etc.)
+fn parse_two_args(
+    group: &proc_macro2::Group,
+    attr_name: &str,
+    arg_description: &str,
+) -> unsynn::Result<(TokenStream, TokenStream)> {
+    use unsynn::IParse;
+
+    let stream = group.stream();
+    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+
+    match iter.parse::<crate::parsing::TwoArgs>() {
+        Ok(two_args) => Ok(two_args.into_streams()),
+        Err(_) => unsynn::Error::other(
+            &iter,
+            format!(
+                "{}() requires exactly 2 comma-separated arguments ({})",
+                attr_name, arg_description
+            ),
+        ),
+    }
+}
+
 impl FieldAttrs {
     /// Parse attributes from a field's attribute list
     /// Uses unsynn grammar to parse BpafAttr and DocInner structures directly
@@ -176,26 +201,8 @@ impl FieldAttrs {
                         field_attrs.consumer = Some(ConsumerType::Switch);
                     }
                     BpafInner::Flag(fi) => {
-                        let stream = fi.values.0.stream();
-                        let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-                        let (present, absent) = match iter.parse::<crate::parsing::TwoArgs>() {
-                            Ok(two_args) => {
-                                let (first, second) = two_args.into_streams();
-                                if second.is_empty() {
-                                    return unsynn::Error::other(
-                                        &iter,
-                                        "flag() requires exactly 2 comma-separated arguments (present value, absent value)".to_string(),
-                                    );
-                                }
-                                (first, second)
-                            }
-                            Err(_) => {
-                                return unsynn::Error::other(
-                                    &iter,
-                                    "flag() requires exactly 2 comma-separated arguments (present value, absent value)".to_string(),
-                                );
-                            }
-                        };
+                        let (present, absent) =
+                            parse_two_args(&fi.values.0, "flag", "present value, absent value")?;
                         field_attrs.consumer = Some(ConsumerType::Flag {
                             present,
                             absent,
@@ -220,26 +227,8 @@ impl FieldAttrs {
                             unsynn::ToTokens::to_tokens(&t.ty, &mut ts);
                             ts
                         });
-                        let stream = ai.args.0.stream();
-                        let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-                        let (metavar_expr, check) = match iter.parse::<crate::parsing::TwoArgs>() {
-                            Ok(two_args) => {
-                                let (first, second) = two_args.into_streams();
-                                if second.is_empty() {
-                                    return unsynn::Error::other(
-                                        &iter,
-                                        "any() requires exactly 2 comma-separated arguments (metavar, check_fn)".to_string(),
-                                    );
-                                }
-                                (first, second)
-                            }
-                            Err(_) => {
-                                return unsynn::Error::other(
-                                    &iter,
-                                    "any() requires exactly 2 comma-separated arguments (metavar, check_fn)".to_string(),
-                                );
-                            }
-                        };
+                        let (metavar_expr, check) =
+                            parse_two_args(&ai.args.0, "any", "metavar, check_fn")?;
 
                         let metavar_str = metavar_expr.to_string();
                         let metavar = if metavar_str.starts_with('"') && metavar_str.ends_with('"') {
@@ -312,26 +301,8 @@ impl FieldAttrs {
 
                     // PostDecor attributes
                     BpafInner::Guard(gi) => {
-                        let stream = gi.args.0.stream();
-                        let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-                        let (check, msg) = match iter.parse::<crate::parsing::TwoArgs>() {
-                            Ok(two_args) => {
-                                let (first, second) = two_args.into_streams();
-                                if second.is_empty() {
-                                    return unsynn::Error::other(
-                                        &iter,
-                                        "guard() requires exactly 2 comma-separated arguments (check_fn, error_message)".to_string(),
-                                    );
-                                }
-                                (first, second)
-                            }
-                            Err(_) => {
-                                return unsynn::Error::other(
-                                    &iter,
-                                    "guard() requires exactly 2 comma-separated arguments (check_fn, error_message)".to_string(),
-                                );
-                            }
-                        };
+                        let (check, msg) =
+                            parse_two_args(&gi.args.0, "guard", "check_fn, error_message")?;
                         field_attrs.postpr.push(Post::Decor(PostDecor::Guard {
                             check,
                             msg,

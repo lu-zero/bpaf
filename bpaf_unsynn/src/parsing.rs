@@ -755,21 +755,28 @@ unsynn! {
         pub restriction: Option<ParenthesisGroup>,
     }
 
-    /// Two comma-separated arguments
+    /// Two comma-separated arguments (both non-empty)
     /// Used for attributes like flag(present, absent) or guard(check, msg)
+    /// Requires at least 1 token before comma, a comma, and at least 1 token after comma
     pub struct TwoArgs {
-        /// First argument (tokens before comma)
-        pub first: LazyVec<TokenTree, Comma>,
-        /// Second argument (tokens after comma)
-        pub second: Vec<TokenTree>,
+        /// First argument (at least 1 token before comma)
+        pub first: Many<Cons<Except<Comma>, TokenTree>>,
+        /// Required comma separator
+        pub _comma: Comma,
+        /// Second argument (at least 1 token after comma)
+        pub second: Many<TokenTree>,
     }
 }
 
 impl TwoArgs {
     /// Convert to pair of TokenStreams
     pub fn into_streams(self) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
-        let first: proc_macro2::TokenStream = self.first.vec.into_iter().collect();
-        let second: proc_macro2::TokenStream = self.second.into_iter().collect();
+        let first: proc_macro2::TokenStream = self.first.0.into_iter()
+            .map(|delimited| delimited.value.second)  // Extract TokenTree from Cons<Except<Comma>, TokenTree>
+            .collect();
+        let second: proc_macro2::TokenStream = self.second.0.into_iter()
+            .map(|delimited| delimited.value)
+            .collect();
         (first, second)
     }
 }
