@@ -204,3 +204,85 @@ fn multi_line_doc_compiles() {
     let r = parser.run_inner(&[]).unwrap();
     assert!(!r.option);
 }
+
+// =============================================================================
+// Multi-paragraph doc comments (descr/header/footer)
+// =============================================================================
+
+/// This is the description paragraph.
+/// It can span multiple lines.
+///
+///
+/// This is the header paragraph.
+/// It appears after a double empty line.
+///
+///
+/// This is the footer paragraph.
+/// Everything from the third paragraph onwards
+/// becomes the footer.
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct MultiParagraphDoc {
+    /// Option help text
+    #[bpaf(long)]
+    verbose: bool,
+}
+
+#[test]
+fn multi_paragraph_doc_splits_correctly() {
+    let parser = MultiParagraphDoc::parse();
+
+    // Verify parsing works
+    let r = parser.run_inner(&["--verbose"]).unwrap();
+    assert!(r.verbose);
+
+    // Verify help output has paragraphs in correct positions
+    let help = parser
+        .run_inner(&["--help"])
+        .unwrap_err()
+        .unwrap_stdout();
+
+    // Find positions of each section
+    let descr_pos = help.find("This is the description paragraph");
+    let usage_pos = help.find("Usage:");
+    let header_pos = help.find("This is the header paragraph");
+    let options_pos = help.find("Available options:");
+    let footer_pos = help.find("This is the footer paragraph");
+
+    // All sections must be present
+    let descr_pos = descr_pos.expect("Description should be present in help");
+    let usage_pos = usage_pos.expect("Usage should be present in help");
+    let header_pos = header_pos.expect("Header should be present in help");
+    let options_pos = options_pos.expect("Available options should be present in help");
+    let footer_pos = footer_pos.expect("Footer should be present in help");
+
+    // Verify correct ordering: descr < usage < header < options < footer
+    assert!(
+        descr_pos < usage_pos,
+        "Description ({}) should come before usage ({})\n{}",
+        descr_pos,
+        usage_pos,
+        help
+    );
+    assert!(
+        usage_pos < header_pos,
+        "Usage ({}) should come before header ({})\n{}",
+        usage_pos,
+        header_pos,
+        help
+    );
+    assert!(
+        header_pos < options_pos,
+        "Header ({}) should come before options ({})\n{}",
+        header_pos,
+        options_pos,
+        help
+    );
+    assert!(
+        options_pos < footer_pos,
+        "Options ({}) should come before footer ({})\n{}",
+        options_pos,
+        footer_pos,
+        help
+    );
+}
