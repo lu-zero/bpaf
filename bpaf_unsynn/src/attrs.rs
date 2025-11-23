@@ -138,11 +138,13 @@ fn parse_two_args(
 
     let stream = group.stream();
     let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+    // Get first token for span information
+    let first_token = iter.clone().next();
 
     match iter.parse::<crate::parsing::TwoArgs>() {
         Ok(two_args) => Ok(two_args.into_streams()),
         Err(_) => unsynn::Error::other(
-            None,
+            first_token,
             &iter,
             format!(
                 "{}() requires exactly 2 comma-separated arguments ({})",
@@ -159,6 +161,8 @@ fn parse_any_args(group: &proc_macro2::Group) -> unsynn::Result<(String, TokenSt
 
     let stream = group.stream();
     let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+    // Get first token for span information
+    let first_token = iter.clone().next();
 
     match iter.parse::<crate::parsing::AnyArgs>() {
         Ok(any_args) => {
@@ -167,7 +171,7 @@ fn parse_any_args(group: &proc_macro2::Group) -> unsynn::Result<(String, TokenSt
             Ok((metavar, check))
         }
         Err(_) => unsynn::Error::other(
-            None,
+            first_token,
             &iter,
             "any() requires a string literal for metavar and a check function: any(\"METAVAR\", check_fn)".to_string(),
         ),

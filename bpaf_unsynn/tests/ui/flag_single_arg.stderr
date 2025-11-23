@@ -1,7 +1,5 @@
-error: Parse error: Parser failed: expected (proc_macro2::TokenStream, proc_macro2::TokenStream), because flag() requires exactly 2 comma-separated arguments (present value, absent value), found None at None
- --> tests/ui/flag_single_arg.rs:3:24
+error: Parser failed: expected (proc_macro2::TokenStream, proc_macro2::TokenStream), because flag() requires exactly 2 comma-separated arguments (present value, absent value), found Ident { sym: true, span: #0 bytes(179..183) } at LineColumn { line: 6, column: 22 }
+ --> tests/ui/flag_single_arg.rs:6:23
   |
-3 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
-  |                        ^^^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in the derive macro `bpaf_unsynn::Bpaf` (in Nightly builds, run with -Z macro-backtrace for more info)
+6 |     #[bpaf(long, flag(true))]
+  |                       ^^^^

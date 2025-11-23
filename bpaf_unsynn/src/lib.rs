@@ -25,11 +25,20 @@ pub fn derive_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match iter.parse::<Top>() {
         Ok(top) => quote::quote! { #top }.into(),
         Err(e) => {
-            let err = format!("Parse error: {:?}", e);
-            quote::quote! {
-                compile_error!(#err);
+            let err = e.to_string();
+            // Try to get the span from the failed token for better error location
+            if let Some(token) = e.failed_at() {
+                let span = token.span();
+                quote::quote_spanned! { span =>
+                    compile_error!(#err);
+                }
+                .into()
+            } else {
+                quote::quote! {
+                    compile_error!(#err);
+                }
+                .into()
             }
-            .into()
         }
     }
 }

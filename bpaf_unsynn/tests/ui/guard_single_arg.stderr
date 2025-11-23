@@ -1,7 +1,5 @@
-error: Parse error: Parser failed: expected (proc_macro2::TokenStream, proc_macro2::TokenStream), because guard() requires exactly 2 comma-separated arguments (check_fn, error_message), found None at None
- --> tests/ui/guard_single_arg.rs:7:24
-  |
-7 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
-  |                        ^^^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in the derive macro `bpaf_unsynn::Bpaf` (in Nightly builds, run with -Z macro-backtrace for more info)
+error: Parser failed: expected (proc_macro2::TokenStream, proc_macro2::TokenStream), because guard() requires exactly 2 comma-separated arguments (check_fn, error_message), found Ident { sym: check_positive, span: #0 bytes(250..264) } at LineColumn { line: 10, column: 40 }
+  --> tests/ui/guard_single_arg.rs:10:41
+   |
+10 |     #[bpaf(long, argument("NUM"), guard(check_positive))]
+   |                                         ^^^^^^^^^^^^^^
