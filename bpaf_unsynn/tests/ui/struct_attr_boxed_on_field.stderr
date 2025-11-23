@@ -1,0 +1,5 @@
+error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because boxed is a struct-level attribute, not a field attribute, found Ident { sym: boxed, span: #0 bytes(152..157) } at LineColumn { line: 6, column: 11 }
+ --> tests/ui/struct_attr_boxed_on_field.rs:6:12
+  |
+6 |     #[bpaf(boxed)]
+  |            ^^^^^

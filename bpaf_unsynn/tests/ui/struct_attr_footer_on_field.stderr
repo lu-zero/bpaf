@@ -1,0 +1,5 @@
+error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because footer is a struct-level attribute, not a field attribute, found Ident { sym: footer, span: #0 bytes(153..159) } at LineColumn { line: 6, column: 11 }
+ --> tests/ui/struct_attr_footer_on_field.rs:6:12
+  |
+6 |     #[bpaf(footer("test"))]
+  |            ^^^^^^

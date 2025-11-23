@@ -1,0 +1,5 @@
+error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because fallback_to_usage is a struct-level attribute, not a field attribute, found Ident { sym: fallback_to_usage, span: #0 bytes(164..181) } at LineColumn { line: 6, column: 11 }
+ --> tests/ui/struct_attr_fallback_to_usage_on_field.rs:6:12
+  |
+6 |     #[bpaf(fallback_to_usage)]
+  |            ^^^^^^^^^^^^^^^^^

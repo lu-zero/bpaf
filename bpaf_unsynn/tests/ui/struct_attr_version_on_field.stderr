@@ -1,0 +1,5 @@
+error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because version is a struct-level attribute, not a field attribute, found Ident { sym: version, span: #0 bytes(154..161) } at LineColumn { line: 6, column: 11 }
+ --> tests/ui/struct_attr_version_on_field.rs:6:12
+  |
+6 |     #[bpaf(version("1.0"))]
+  |            ^^^^^^^
