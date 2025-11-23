@@ -6,8 +6,6 @@
 //!
 //! This file contains a passing test demonstrating correct flag usage.
 
-use bpaf::Parser;
-
 // =============================================================================
 // Correct usage (2 arguments) - this test passes
 // =============================================================================
