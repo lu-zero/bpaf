@@ -420,8 +420,8 @@ impl FieldAttrs {
                     }
 
                     // Unknown attributes
-                    BpafInner::Unknown(_) => {
-                        // Forward compatibility - ignore unknown attributes
+                    BpafInner::Unknown(u) => {
+                        return unsynn::Error::unexpected_token(&u.to_token_iter());
                     }
                 }
             }
