@@ -230,3 +230,46 @@ fn pathbuf_becomes_argument() {
     let r = parser.run_inner(&["--path", "/tmp/test"]).unwrap();
     assert_eq!(r.path, PathBuf::from("/tmp/test"));
 }
+
+// =============================================================================
+// Explicit bool type with long name (edge case for type inference)
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct BoolWithLongName {
+    #[bpaf(long("enable-feature"))]
+    enabled: bool,
+}
+
+#[test]
+fn bool_with_explicit_long_name() {
+    let parser = BoolWithLongName::parse();
+
+    let r = parser.run_inner(&[]).unwrap();
+    assert!(!r.enabled);
+
+    let r = parser.run_inner(&["--enable-feature"]).unwrap();
+    assert!(r.enabled);
+}
+
+// =============================================================================
+// Unit type with pure fallback (edge case)
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct UnitWithPure {
+    #[bpaf(pure(()))]
+    unit_field: (),
+    name: String,
+}
+
+#[test]
+fn unit_with_pure_attribute() {
+    let parser = UnitWithPure::parse();
+
+    let r = parser.run_inner(&["--name", "test"]).unwrap();
+    assert_eq!(r.unit_field, ());
+    assert_eq!(r.name, "test");
+}

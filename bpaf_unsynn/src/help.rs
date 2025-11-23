@@ -41,3 +41,35 @@ impl From<String> for Help {
         Help::Doc(value)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_help_from_str() {
+        let help: Help = "test string".into();
+        match help {
+            Help::Doc(s) => assert_eq!(s, "test string"),
+            Help::Custom(_) => panic!("Expected Help::Doc"),
+        }
+    }
+
+    #[test]
+    fn test_help_from_string() {
+        let help: Help = String::from("test string").into();
+        match help {
+            Help::Doc(s) => assert_eq!(s, "test string"),
+            Help::Custom(_) => panic!("Expected Help::Doc"),
+        }
+    }
+
+    #[test]
+    fn test_help_from_empty_str() {
+        let help: Help = "".into();
+        match help {
+            Help::Doc(s) => assert_eq!(s, ""),
+            Help::Custom(_) => panic!("Expected Help::Doc"),
+        }
+    }
+}

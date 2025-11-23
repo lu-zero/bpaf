@@ -238,3 +238,58 @@ fn chained_map_then_optional() {
     let r = parser.run_inner(&["--value", "10"]).unwrap();
     assert_eq!(r.value, Some(20)); // 10 * 2
 }
+
+// =============================================================================
+// Direct parse attribute (not via external)
+// =============================================================================
+
+fn validate_positive(n: u32) -> Result<u32, String> {
+    if n > 0 {
+        Ok(n)
+    } else {
+        Err("must be positive".to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct DirectParse {
+    #[bpaf(long, argument("NUM"), parse(validate_positive))]
+    count: u32,
+}
+
+#[test]
+fn direct_parse_attribute() {
+    let parser = DirectParse::parse();
+
+    let r = parser.run_inner(&["--count", "42"]).unwrap();
+    assert_eq!(r.count, 42);
+
+    // Invalid value (zero is rejected by validator)
+    let r = parser.run_inner(&["--count", "0"]);
+    assert!(r.is_err());
+}
+
+// =============================================================================
+// Direct collect attribute (not via external)
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct DirectCollect {
+    #[bpaf(long, argument("VAL"), collect)]
+    items: Vec<String>,
+}
+
+#[test]
+fn direct_collect_attribute() {
+    let parser = DirectCollect::parse();
+
+    let r = parser.run_inner(&[]).unwrap();
+    assert!(r.items.is_empty());
+
+    let r = parser
+        .run_inner(&["--items", "a", "--items", "b", "--items", "c"])
+        .unwrap();
+    assert_eq!(r.items, vec!["a", "b", "c"]);
+}

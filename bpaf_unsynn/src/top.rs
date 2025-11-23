@@ -112,20 +112,24 @@ fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
             let mut ty_iter = unsynn::ToTokens::to_token_iter(&ty_tokens);
             let shape: TypeShape = ty_iter.parse()?;
 
-            // Parse field attributes
-            let attrs =
-                FieldAttrs::parse_from_attrs(&name.to_string(), &bpaf_attrs, &doc_comments).unwrap_or_default();
-
-            Ok(StructField {
-                name,
-                ty: ty_tokens,
-                shape,
-                attrs,
-            })
+            // Return the parsed field structure and attributes for validation
+            Ok((name, ty_tokens, shape, bpaf_attrs, doc_comments))
         });
 
         match field_result {
-            Ok(field) => fields.push(field),
+            Ok((name, ty_tokens, shape, bpaf_attrs, doc_comments)) => {
+                // Parse and validate field attributes AFTER the transaction succeeds
+                // This ensures validation errors are propagated, not swallowed
+                let attrs =
+                    FieldAttrs::parse_from_attrs(&name.to_string(), &bpaf_attrs, &doc_comments)?;
+
+                fields.push(StructField {
+                    name,
+                    ty: ty_tokens,
+                    shape,
+                    attrs,
+                });
+            }
             Err(_) => {
                 // No more fields
                 break;

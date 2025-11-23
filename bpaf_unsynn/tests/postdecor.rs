@@ -182,6 +182,38 @@ fn display_fallback_compiles() {
 }
 
 // =============================================================================
+// FormatFallback attribute
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+struct CustomType(String);
+
+impl std::str::FromStr for CustomType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(CustomType(s.to_string()))
+    }
+}
+
+fn format_custom_type(val: &CustomType, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "custom({})", val.0)
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct FormatFallbackAttr {
+    #[bpaf(long, argument("VAL"), fallback(CustomType("default".to_string())), format_fallback(format_custom_type))]
+    value: CustomType,
+}
+
+#[test]
+fn format_fallback_compiles() {
+    let parser = FormatFallbackAttr::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.value.0, "default");
+}
+
+// =============================================================================
 // Last attribute - uses last occurrence when specified multiple times
 // =============================================================================
 
