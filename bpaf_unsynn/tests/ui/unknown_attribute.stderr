@@ -1,0 +1,7 @@
+error: Parse error: Unexpected token: expected bpaf_unsynn::attrs::FieldAttrs, found Ident { sym: foobar_unknown, span: #0 bytes(222..236) } at LineColumn { line: 7, column: 11 }
+ --> tests/ui/unknown_attribute.rs:4:24
+  |
+4 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
+  |                        ^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the derive macro `bpaf_unsynn::Bpaf` (in Nightly builds, run with -Z macro-backtrace for more info)
