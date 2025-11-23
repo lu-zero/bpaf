@@ -230,11 +230,17 @@ impl FieldAttrs {
                         let (metavar_expr, check) =
                             parse_two_args(&ai.args.0, "any", "metavar, check_fn")?;
 
+                        // Validate that metavar is a string literal
                         let metavar_str = metavar_expr.to_string();
                         let metavar = if metavar_str.starts_with('"') && metavar_str.ends_with('"') {
                             metavar_str[1..metavar_str.len() - 1].to_string()
                         } else {
-                            metavar_str
+                            // Not a string literal - return error
+                            let mut iter = unsynn::ToTokens::to_token_iter(&metavar_expr);
+                            return unsynn::Error::other(
+                                &iter,
+                                "any() metavar must be a string literal (e.g., \"METAVAR\")".to_string(),
+                            );
                         };
 
                         field_attrs.consumer = Some(ConsumerType::Any { metavar, ty, check });

@@ -1,0 +1,7 @@
+error: Parse error: any() metavar must be a string literal (e.g., "METAVAR")
+ --> tests/ui/any_unquoted_metavar.rs:7:24
+  |
+7 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
+  |                        ^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the derive macro `bpaf_unsynn::Bpaf` (in Nightly builds, run with -Z macro-backtrace for more info)

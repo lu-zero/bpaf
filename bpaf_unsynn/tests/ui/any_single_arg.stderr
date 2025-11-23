@@ -1,0 +1,7 @@
+error: Parse error: any() requires exactly 2 comma-separated arguments (metavar, check_fn)
+ --> tests/ui/any_single_arg.rs:3:24
+  |
+3 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
+  |                        ^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the derive macro `bpaf_unsynn::Bpaf` (in Nightly builds, run with -Z macro-backtrace for more info)
