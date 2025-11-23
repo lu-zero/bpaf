@@ -1,9 +1,9 @@
 //! Top-level structure parsing
 
 use crate::attrs::{ConsumerType, FieldAttrs, Post, PostDecor, PostParse};
-use crate::utils::to_kebab_case;
 use crate::mode::Mode;
 use crate::parsing::*;
+use crate::utils::to_kebab_case;
 use quote::{quote, ToTokens};
 
 // Constants for magic strings
@@ -298,7 +298,9 @@ fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
 ///
 /// Groups consecutive non-empty doc comments, using empty lines as paragraph separators.
 /// Returns (first_paragraph, second_paragraph, remaining_paragraphs)
-fn parse_doc_paragraphs(doc_attrs: &[DocInner]) -> (Option<String>, Option<String>, Option<String>) {
+fn parse_doc_paragraphs(
+    doc_attrs: &[DocInner],
+) -> (Option<String>, Option<String>, Option<String>) {
     let mut paragraphs = Vec::new();
     let mut current = String::new();
     let mut prev_empty = false;
@@ -1059,10 +1061,8 @@ impl Top {
         }
 
         // Generate parsers for each field
-        let field_parsers: Vec<TokenStream> = fields
-            .iter()
-            .map(|field| self.emit_field(field))
-            .collect();
+        let field_parsers: Vec<TokenStream> =
+            fields.iter().map(|field| self.emit_field(field)).collect();
 
         // Generate field names for construction
         let field_names: Vec<&Ident> = fields.iter().map(|f| &f.name).collect();

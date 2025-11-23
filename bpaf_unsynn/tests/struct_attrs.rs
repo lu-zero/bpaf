@@ -229,7 +229,9 @@ struct CombinedAttrs {
 #[test]
 fn combined_struct_attrs() {
     let parser = CombinedAttrs::my_parser();
-    let r = parser.run_inner(&["--verbose", "--input", "test.txt"]).unwrap();
+    let r = parser
+        .run_inner(&["--verbose", "--input", "test.txt"])
+        .unwrap();
     assert!(r.verbose);
     assert_eq!(r.input, Some("test.txt".to_string()));
 }
@@ -272,7 +274,9 @@ struct Outer {
 #[test]
 fn nested_struct_external() {
     let parser = Outer::parse();
-    let r = parser.run_inner(&["--inner-value", "test", "--outer-flag"]).unwrap();
+    let r = parser
+        .run_inner(&["--inner-value", "test", "--outer-flag"])
+        .unwrap();
     assert_eq!(r.inner.inner_value, "test");
     assert!(r.outer_flag);
 }
@@ -300,7 +304,9 @@ struct FullyDecoratedOptions {
 #[test]
 fn fully_decorated_options() {
     let parser = FullyDecoratedOptions::parse();
-    let r = parser.run_inner(&["--verbose", "--input", "test.txt"]).unwrap();
+    let r = parser
+        .run_inner(&["--verbose", "--input", "test.txt"])
+        .unwrap();
     assert!(r.verbose);
     assert_eq!(r.input, Some("test.txt".to_string()));
 }

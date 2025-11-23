@@ -151,6 +151,27 @@ fn parse_two_args(
     }
 }
 
+/// Helper function to parse any() arguments: string literal and check function
+/// Returns an error if metavar is not a string literal or arguments are malformed
+fn parse_any_args(group: &proc_macro2::Group) -> unsynn::Result<(String, TokenStream)> {
+    use unsynn::IParse;
+
+    let stream = group.stream();
+    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+
+    match iter.parse::<crate::parsing::AnyArgs>() {
+        Ok(any_args) => {
+            let metavar = any_args.metavar_str().to_string();
+            let check = any_args.check_fn_tokens();
+            Ok((metavar, check))
+        }
+        Err(_) => unsynn::Error::other(
+            &iter,
+            "any() requires a string literal for metavar and a check function: any(\"METAVAR\", check_fn)".to_string(),
+        ),
+    }
+}
+
 impl FieldAttrs {
     /// Parse attributes from a field's attribute list
     /// Uses unsynn grammar to parse BpafAttr and DocInner structures directly
@@ -183,14 +204,20 @@ impl FieldAttrs {
                 match inner {
                     // Name attributes - resolve immediately using field_name
                     BpafInner::Short(si) => {
-                        field_attrs.short = Some(si.ch.as_ref()
-                            .map(|g| g.content.value())
-                            .unwrap_or_else(|| field_name.chars().next().unwrap_or('_')));
+                        field_attrs.short = Some(
+                            si.ch
+                                .as_ref()
+                                .map(|g| g.content.value())
+                                .unwrap_or_else(|| field_name.chars().next().unwrap_or('_')),
+                        );
                     }
                     BpafInner::Long(li) => {
-                        field_attrs.long = Some(li.name.as_ref()
-                            .map(|g| g.content.as_str().to_string())
-                            .unwrap_or_else(|| to_kebab_case(field_name)));
+                        field_attrs.long = Some(
+                            li.name
+                                .as_ref()
+                                .map(|g| g.content.as_str().to_string())
+                                .unwrap_or_else(|| to_kebab_case(field_name)),
+                        );
                     }
                     BpafInner::Env(ei) => {
                         field_attrs.env = Some(ei.expr.0.stream());
@@ -203,10 +230,7 @@ impl FieldAttrs {
                     BpafInner::Flag(fi) => {
                         let (present, absent) =
                             parse_two_args(&fi.values.0, "flag", "present value, absent value")?;
-                        field_attrs.consumer = Some(ConsumerType::Flag {
-                            present,
-                            absent,
-                        });
+                        field_attrs.consumer = Some(ConsumerType::Flag { present, absent });
                     }
                     BpafInner::Argument(ai) => {
                         let metavar = ai.metavar.as_ref().map(|g| g.content.as_str().to_string());
@@ -227,21 +251,9 @@ impl FieldAttrs {
                             unsynn::ToTokens::to_tokens(&t.ty, &mut ts);
                             ts
                         });
-                        let (metavar_expr, check) =
-                            parse_two_args(&ai.args.0, "any", "metavar, check_fn")?;
 
-                        // Validate that metavar is a string literal
-                        let metavar_str = metavar_expr.to_string();
-                        let metavar = if metavar_str.starts_with('"') && metavar_str.ends_with('"') {
-                            metavar_str[1..metavar_str.len() - 1].to_string()
-                        } else {
-                            // Not a string literal - return error
-                            let mut iter = unsynn::ToTokens::to_token_iter(&metavar_expr);
-                            return unsynn::Error::other(
-                                &iter,
-                                "any() metavar must be a string literal (e.g., \"METAVAR\")".to_string(),
-                            );
-                        };
+                        // Parse and validate any() arguments
+                        let (metavar, check) = parse_any_args(&ai.args.0)?;
 
                         field_attrs.consumer = Some(ConsumerType::Any { metavar, ty, check });
                     }
@@ -309,10 +321,9 @@ impl FieldAttrs {
                     BpafInner::Guard(gi) => {
                         let (check, msg) =
                             parse_two_args(&gi.args.0, "guard", "check_fn, error_message")?;
-                        field_attrs.postpr.push(Post::Decor(PostDecor::Guard {
-                            check,
-                            msg,
-                        }));
+                        field_attrs
+                            .postpr
+                            .push(Post::Decor(PostDecor::Guard { check, msg }));
                     }
                     BpafInner::Hide(_) => {
                         field_attrs.postpr.push(Post::Decor(PostDecor::Hide));
@@ -326,9 +337,11 @@ impl FieldAttrs {
                         }));
                     }
                     BpafInner::FallbackWith(fwi) => {
-                        field_attrs.postpr.push(Post::Decor(PostDecor::FallbackWith {
-                            f: fwi.func.0.stream(),
-                        }));
+                        field_attrs
+                            .postpr
+                            .push(Post::Decor(PostDecor::FallbackWith {
+                                f: fwi.func.0.stream(),
+                            }));
                     }
                     BpafInner::GroupHelp(ghi) => {
                         field_attrs.postpr.push(Post::Decor(PostDecor::GroupHelp {
@@ -336,15 +349,21 @@ impl FieldAttrs {
                         }));
                     }
                     BpafInner::DebugFallback(_) => {
-                        field_attrs.postpr.push(Post::Decor(PostDecor::DebugFallback));
+                        field_attrs
+                            .postpr
+                            .push(Post::Decor(PostDecor::DebugFallback));
                     }
                     BpafInner::DisplayFallback(_) => {
-                        field_attrs.postpr.push(Post::Decor(PostDecor::DisplayFallback));
+                        field_attrs
+                            .postpr
+                            .push(Post::Decor(PostDecor::DisplayFallback));
                     }
                     BpafInner::FormatFallback(ffi) => {
-                        field_attrs.postpr.push(Post::Decor(PostDecor::FormatFallback {
-                            formatter: ffi.formatter.0.stream(),
-                        }));
+                        field_attrs
+                            .postpr
+                            .push(Post::Decor(PostDecor::FormatFallback {
+                                formatter: ffi.formatter.0.stream(),
+                            }));
                     }
                     BpafInner::Last(_) => {
                         field_attrs.postpr.push(Post::Decor(PostDecor::Last));
@@ -356,12 +375,16 @@ impl FieldAttrs {
                     }
                     BpafInner::Group(gi) => {
                         let group = gi.name.content.as_str().to_string();
-                        field_attrs.postpr.push(Post::Decor(PostDecor::CompleteGroup { group }));
+                        field_attrs
+                            .postpr
+                            .push(Post::Decor(PostDecor::CompleteGroup { group }));
                     }
                     BpafInner::CompleteShell(csi) => {
-                        field_attrs.postpr.push(Post::Decor(PostDecor::CompleteShell {
-                            f: csi.expr.0.stream(),
-                        }));
+                        field_attrs
+                            .postpr
+                            .push(Post::Decor(PostDecor::CompleteShell {
+                                f: csi.expr.0.stream(),
+                            }));
                     }
 
                     // Other attributes
@@ -376,11 +399,21 @@ impl FieldAttrs {
                     }
 
                     // Mode attributes (shouldn't appear on fields, but handle gracefully)
-                    BpafInner::Options(_) | BpafInner::Parser(_) | BpafInner::Command(_)
-                    | BpafInner::Skip(_) | BpafInner::FallbackToUsage(_) | BpafInner::Path(_)
-                    | BpafInner::Generate(_) | BpafInner::Private(_) | BpafInner::Boxed(_)
-                    | BpafInner::Descr(_) | BpafInner::Footer(_) | BpafInner::Header(_)
-                    | BpafInner::Usage(_) | BpafInner::Version(_) | BpafInner::MaxWidth(_)
+                    BpafInner::Options(_)
+                    | BpafInner::Parser(_)
+                    | BpafInner::Command(_)
+                    | BpafInner::Skip(_)
+                    | BpafInner::FallbackToUsage(_)
+                    | BpafInner::Path(_)
+                    | BpafInner::Generate(_)
+                    | BpafInner::Private(_)
+                    | BpafInner::Boxed(_)
+                    | BpafInner::Descr(_)
+                    | BpafInner::Footer(_)
+                    | BpafInner::Header(_)
+                    | BpafInner::Usage(_)
+                    | BpafInner::Version(_)
+                    | BpafInner::MaxWidth(_)
                     | BpafInner::CargoHelper(_) => {
                         // These are enum/struct-level attributes, not field-level
                         // Ignore them here

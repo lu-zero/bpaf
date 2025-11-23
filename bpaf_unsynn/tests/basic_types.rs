@@ -155,9 +155,7 @@ struct NestedOptionVec {
 }
 
 fn parse_opt_vec() -> impl Parser<Vec<String>> {
-    bpaf::long("item")
-        .argument::<String>("ITEM")
-        .many()
+    bpaf::long("item").argument::<String>("ITEM").many()
 }
 
 #[test]
@@ -177,9 +175,7 @@ struct NestedVecOption {
 }
 
 fn parse_optional_item() -> impl Parser<Option<String>> {
-    bpaf::long("item")
-        .argument::<String>("ITEM")
-        .optional()
+    bpaf::long("item").argument::<String>("ITEM").optional()
 }
 
 #[test]

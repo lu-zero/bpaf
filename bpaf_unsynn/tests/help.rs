@@ -3,7 +3,6 @@
 //! Covers: doc comments, help attribute, version, header, footer, usage,
 //! descr (top-level), and help formatting
 
-
 // =============================================================================
 // Doc comments -> help text
 // =============================================================================
@@ -99,7 +98,11 @@ fn explicit_version_compiles() {
 // =============================================================================
 
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
-#[bpaf(options, header("This appears before help"), footer("This appears after help"))]
+#[bpaf(
+    options,
+    header("This appears before help"),
+    footer("This appears after help")
+)]
 struct HeaderFooter {
     value: String,
 }
@@ -151,7 +154,12 @@ fn descr_compiles() {
 
 /// Program doc comment description
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
-#[bpaf(options, version("2.0.0"), header("=== Header ==="), footer("=== Footer ==="))]
+#[bpaf(
+    options,
+    version("2.0.0"),
+    header("=== Header ==="),
+    footer("=== Footer ===")
+)]
 struct FullyDecorated {
     /// Enable verbose mode
     #[bpaf(short, long)]

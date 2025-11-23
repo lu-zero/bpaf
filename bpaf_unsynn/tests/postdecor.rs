@@ -3,7 +3,6 @@
 //! Covers: guard, hide, hide_usage, custom_usage, fallback, fallback_with,
 //! group_help, debug_fallback, display_fallback, format_fallback, last, complete
 
-
 // =============================================================================
 // Guard attribute
 // =============================================================================
@@ -277,7 +276,10 @@ fn last_with_numeric_type() {
 // =============================================================================
 
 fn complete_fn(_input: &String) -> Vec<(&'static str, Option<&'static str>)> {
-    vec![("option1", Some("First option")), ("option2", Some("Second option"))]
+    vec![
+        ("option1", Some("First option")),
+        ("option2", Some("Second option")),
+    ]
 }
 
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]

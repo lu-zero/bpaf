@@ -513,7 +513,7 @@ unsynn! {
         pub _kw: KAny,
         /// Optional turbofish type
         pub turbofish: Option<TurbofishType>,
-        /// Arguments
+        /// Arguments - parsed separately to provide better error messages
         pub args: ParenthesisGroup,
     }
 
@@ -766,17 +766,51 @@ unsynn! {
         /// Second argument (at least 1 token after comma)
         pub second: Many<TokenTree>,
     }
+
+    /// Arguments for any() attribute: string literal and check function
+    /// Example: any("METAVAR", check_fn)
+    pub struct AnyArgs {
+        /// String literal for metavar (must be quoted)
+        pub metavar: LiteralString,
+        /// Required comma separator
+        pub _comma: Comma,
+        /// Check function (at least 1 token)
+        pub check_fn: Many<TokenTree>,
+    }
 }
 
 impl TwoArgs {
     /// Convert to pair of TokenStreams
     pub fn into_streams(self) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
-        let first: proc_macro2::TokenStream = self.first.0.into_iter()
-            .map(|delimited| delimited.value.second)  // Extract TokenTree from Cons<Except<Comma>, TokenTree>
+        let first: proc_macro2::TokenStream = self
+            .first
+            .0
+            .into_iter()
+            .map(|delimited| delimited.value.second) // Extract TokenTree from Cons<Except<Comma>, TokenTree>
             .collect();
-        let second: proc_macro2::TokenStream = self.second.0.into_iter()
+        let second: proc_macro2::TokenStream = self
+            .second
+            .0
+            .into_iter()
             .map(|delimited| delimited.value)
             .collect();
         (first, second)
+    }
+}
+
+impl AnyArgs {
+    /// Get the metavar string (without quotes)
+    pub fn metavar_str(&self) -> &str {
+        self.metavar.as_str()
+    }
+
+    /// Get the check function as TokenStream
+    pub fn check_fn_tokens(&self) -> proc_macro2::TokenStream {
+        use unsynn::ToTokens;
+        let mut ts = proc_macro2::TokenStream::new();
+        for delimited in &self.check_fn.0 {
+            delimited.value.to_tokens(&mut ts);
+        }
+        ts
     }
 }

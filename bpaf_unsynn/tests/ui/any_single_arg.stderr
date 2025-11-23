@@ -1,4 +1,4 @@
-error: Parse error: any() requires exactly 2 comma-separated arguments (metavar, check_fn)
+error: Parse error: any() requires a string literal for metavar and a check function: any("METAVAR", check_fn)
  --> tests/ui/any_single_arg.rs:3:24
   |
 3 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]

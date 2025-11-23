@@ -177,7 +177,10 @@ enum MultiFieldTuple {
 fn multi_field_tuple_two_fields() {
     let parser = MultiFieldTuple::parse();
     let r = parser.run_inner(&["copy", "src.txt", "dst.txt"]).unwrap();
-    assert_eq!(r, MultiFieldTuple::Copy("src.txt".to_string(), "dst.txt".to_string()));
+    assert_eq!(
+        r,
+        MultiFieldTuple::Copy("src.txt".to_string(), "dst.txt".to_string())
+    );
 }
 
 #[test]
@@ -189,7 +192,11 @@ fn multi_field_tuple_three_fields() {
         .unwrap();
     assert_eq!(
         r,
-        MultiFieldTuple::Move("src.txt".to_string(), "dst.txt".to_string(), "backup.txt".to_string())
+        MultiFieldTuple::Move(
+            "src.txt".to_string(),
+            "dst.txt".to_string(),
+            "backup.txt".to_string()
+        )
     );
 }
 

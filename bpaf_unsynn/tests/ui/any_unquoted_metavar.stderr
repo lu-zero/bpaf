@@ -1,4 +1,4 @@
-error: Parse error: any() metavar must be a string literal (e.g., "METAVAR")
+error: Parse error: any() requires a string literal for metavar and a check function: any("METAVAR", check_fn)
  --> tests/ui/any_unquoted_metavar.rs:7:24
   |
 7 | #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]

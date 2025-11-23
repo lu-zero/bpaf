@@ -166,10 +166,7 @@ struct CountAttr {
 }
 
 fn count_verbose() -> impl Parser<usize> {
-    bpaf::short('v')
-        .long("verbose")
-        .req_flag(())
-        .count()
+    bpaf::short('v').long("verbose").req_flag(()).count()
 }
 
 #[test]

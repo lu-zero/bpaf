@@ -3,7 +3,6 @@
 //! Covers: error handling, complex scenarios, edge cases, and
 //! realistic usage patterns
 
-
 // =============================================================================
 // Error handling - missing required arguments
 // =============================================================================
@@ -76,11 +75,7 @@ fn complex_args_full() {
     let parser = MultipleArgs::parse();
     let r = parser
         .run_inner(&[
-            "-v",
-            "-o", "out.txt",
-            "-i", "a.txt",
-            "--input", "b.txt",
-            "build",
+            "-v", "-o", "out.txt", "-i", "a.txt", "--input", "b.txt", "build",
         ])
         .unwrap();
 
@@ -125,7 +120,9 @@ fn equals_syntax_works() {
 #[test]
 fn space_syntax_works() {
     let parser = AttachedValues::parse();
-    let r = parser.run_inner(&["--config", "test.cfg", "-n", "42"]).unwrap();
+    let r = parser
+        .run_inner(&["--config", "test.cfg", "-n", "42"])
+        .unwrap();
     assert_eq!(r.config, "test.cfg");
     assert_eq!(r.number, 42);
 }
@@ -168,7 +165,9 @@ enum Cargo {
 #[test]
 fn subcommand_build() {
     let parser = Cargo::parse();
-    let r = parser.run_inner(&["build", "--release", "--target", "x86_64"]).unwrap();
+    let r = parser
+        .run_inner(&["build", "--release", "--target", "x86_64"])
+        .unwrap();
 
     match r {
         Cargo::Build { opts } => {
@@ -182,7 +181,9 @@ fn subcommand_build() {
 #[test]
 fn subcommand_run() {
     let parser = Cargo::parse();
-    let r = parser.run_inner(&["run", "--bin", "myapp", "arg1", "arg2"]).unwrap();
+    let r = parser
+        .run_inner(&["run", "--bin", "myapp", "arg1", "arg2"])
+        .unwrap();
 
     match r {
         Cargo::Run { opts } => {
@@ -311,15 +312,21 @@ fn realistic_cli() {
     let r = parser
         .run_inner(&[
             "-v",
-            "-C", "/tmp/repo",
-            "-c", "user.name=Test",
-            "--config", "user.email=test@example.com",
+            "-C",
+            "/tmp/repo",
+            "-c",
+            "user.name=Test",
+            "--config",
+            "user.email=test@example.com",
         ])
         .unwrap();
 
     assert!(r.verbose);
     assert_eq!(r.directory, Some("/tmp/repo".to_string()));
-    assert_eq!(r.configs, vec!["user.name=Test", "user.email=test@example.com"]);
+    assert_eq!(
+        r.configs,
+        vec!["user.name=Test", "user.email=test@example.com"]
+    );
 }
 
 // =============================================================================

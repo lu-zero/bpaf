@@ -3,7 +3,6 @@
 //! Covers: unit variants, tuple variants, struct variants, command variants,
 //! default variants, explicit commands, aliases, and mixed combinations
 
-
 // =============================================================================
 // Basic unit variant enum (flags)
 // =============================================================================
@@ -97,10 +96,7 @@ fn tuple_variant_single_field() {
 #[bpaf(options)]
 enum FileOp {
     #[bpaf(command)]
-    Move {
-        source: String,
-        dest: String,
-    },
+    Move { source: String, dest: String },
     #[bpaf(command)]
     Copy {
         source: String,
@@ -126,7 +122,14 @@ fn struct_variant_fields() {
     );
 
     let r = parser
-        .run_inner(&["copy", "--source", "a.txt", "--dest", "b.txt", "--recursive"])
+        .run_inner(&[
+            "copy",
+            "--source",
+            "a.txt",
+            "--dest",
+            "b.txt",
+            "--recursive",
+        ])
         .unwrap();
     assert_eq!(
         r,
