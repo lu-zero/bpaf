@@ -550,6 +550,49 @@ fn command_with_doc_comment_help() {
 }
 
 // =============================================================================
+// Command variant with explicit help attribute
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum CmdWithExplicitHelp {
+    /// Doc comment (should be overridden)
+    #[bpaf(command, help("Explicit help overrides doc comment"))]
+    Override,
+    #[bpaf(command, help("Help without doc comment"))]
+    NoDoc,
+}
+
+#[test]
+fn command_with_explicit_help_attribute() {
+    let parser = CmdWithExplicitHelp::parse();
+
+    let r = parser.run_inner(&["override"]).unwrap();
+    assert_eq!(r, CmdWithExplicitHelp::Override);
+
+    let r = parser.run_inner(&["no-doc"]).unwrap();
+    assert_eq!(r, CmdWithExplicitHelp::NoDoc);
+
+    // Verify help contains the explicit help text, not doc comment
+    let help = parser.run_inner(&["--help"]).unwrap_err().unwrap_stdout();
+    assert!(
+        help.contains("Explicit help overrides doc comment"),
+        "Help should contain explicit help text: {}",
+        help
+    );
+    assert!(
+        !help.contains("should be overridden"),
+        "Help should NOT contain overridden doc comment: {}",
+        help
+    );
+    assert!(
+        help.contains("Help without doc comment"),
+        "Help should contain help for variant without doc: {}",
+        help
+    );
+}
+
+// =============================================================================
 // Enum with both short and long aliases on command
 // =============================================================================
 

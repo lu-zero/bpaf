@@ -224,6 +224,7 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
                 is_tuple,
                 long_alias: variant_attrs.long_alias,
                 short_alias: variant_attrs.short_alias,
+                help: variant_attrs.help,
             })
         });
 
@@ -253,6 +254,7 @@ struct Ed {
     fallback_to_usage: bool,
     long_alias: Option<String>,
     short_alias: Option<char>,
+    help: Option<String>,
 }
 
 /// Parse variant-level attributes from #[bpaf(...)]
@@ -284,6 +286,11 @@ fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
                 }
                 BpafInner::Short(short) => {
                     result.short_alias = short.ch.as_ref().map(|g| g.content.value());
+                }
+                BpafInner::Help(h) => {
+                    let val = h.text.content.value();
+                    let stripped = val.trim_matches('"');
+                    result.help = Some(stripped.to_string());
                 }
                 _ => {}
             }
@@ -457,6 +464,8 @@ pub struct EnumBranch {
     pub long_alias: Option<String>,
     /// Short alias from #[bpaf(short('x'))]
     pub short_alias: Option<char>,
+    /// Explicit help text from #[bpaf(help("..."))]
+    pub help: Option<String>,
 }
 
 /// Parse struct-level attributes from #[bpaf(...)]
@@ -1101,12 +1110,14 @@ impl Top {
                 let variant_name = &variant.name;
                 let command_name = variant.command_name.clone().unwrap_or_else(|| to_kebab_case(&variant_name.to_string()));
 
-                // Get help text from doc comments
-                let help_text = if !variant.doc_comments.is_empty() {
-                    Some(variant.doc_comments.join("\n"))
-                } else {
-                    None
-                };
+                // Get help text - prefer explicit help() over doc comments
+                let help_text = variant.help.clone().or_else(|| {
+                    if !variant.doc_comments.is_empty() {
+                        Some(variant.doc_comments.join("\n"))
+                    } else {
+                        None
+                    }
+                });
 
                 if has_commands && variant.is_command {
                     // Command-based variant
