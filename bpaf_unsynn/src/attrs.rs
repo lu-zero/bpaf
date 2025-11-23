@@ -178,6 +178,19 @@ fn parse_any_args(group: &proc_macro2::Group) -> unsynn::Result<(String, TokenSt
     }
 }
 
+/// Helper to create an error for struct-level attributes used on fields
+fn struct_level_attr_error<T: unsynn::ToTokens>(
+    value: &T,
+    attr_name: &str,
+) -> unsynn::Result<FieldAttrs> {
+    let mut iter = value.to_token_iter();
+    unsynn::Error::other(
+        iter.next(),
+        &iter,
+        format!("{attr_name} is a struct-level attribute, not a field attribute"),
+    )
+}
+
 impl FieldAttrs {
     /// Parse attributes from a field's attribute list
     /// Uses unsynn grammar to parse BpafAttr and DocInner structures directly
@@ -404,26 +417,25 @@ impl FieldAttrs {
                         field_attrs.ignore_rustdoc = true;
                     }
 
-                    // Mode attributes (shouldn't appear on fields, but handle gracefully)
-                    BpafInner::Options(_)
-                    | BpafInner::Parser(_)
-                    | BpafInner::Command(_)
-                    | BpafInner::Skip(_)
-                    | BpafInner::FallbackToUsage(_)
-                    | BpafInner::Path(_)
-                    | BpafInner::Generate(_)
-                    | BpafInner::Private(_)
-                    | BpafInner::Boxed(_)
-                    | BpafInner::Descr(_)
-                    | BpafInner::Footer(_)
-                    | BpafInner::Header(_)
-                    | BpafInner::Usage(_)
-                    | BpafInner::Version(_)
-                    | BpafInner::MaxWidth(_)
-                    | BpafInner::CargoHelper(_) => {
-                        // These are enum/struct-level attributes, not field-level
-                        // Ignore them here
+                    // Mode/struct-level attributes - shouldn't appear on fields
+                    BpafInner::Options(v) => return struct_level_attr_error(v, "options"),
+                    BpafInner::Command(v) => return struct_level_attr_error(v, "command"),
+                    BpafInner::Parser(v) => return struct_level_attr_error(v, "parser"),
+                    BpafInner::Skip(v) => return struct_level_attr_error(v, "skip"),
+                    BpafInner::FallbackToUsage(v) => {
+                        return struct_level_attr_error(v, "fallback_to_usage")
                     }
+                    BpafInner::Path(v) => return struct_level_attr_error(v, "bpaf_path"),
+                    BpafInner::Generate(v) => return struct_level_attr_error(v, "generate"),
+                    BpafInner::Private(v) => return struct_level_attr_error(v, "private"),
+                    BpafInner::Boxed(v) => return struct_level_attr_error(v, "boxed"),
+                    BpafInner::Descr(v) => return struct_level_attr_error(v, "descr"),
+                    BpafInner::Footer(v) => return struct_level_attr_error(v, "footer"),
+                    BpafInner::Header(v) => return struct_level_attr_error(v, "header"),
+                    BpafInner::Usage(v) => return struct_level_attr_error(v, "usage"),
+                    BpafInner::Version(v) => return struct_level_attr_error(v, "version"),
+                    BpafInner::MaxWidth(v) => return struct_level_attr_error(v, "max_width"),
+                    BpafInner::CargoHelper(v) => return struct_level_attr_error(v, "cargo_helper"),
 
                     // Unknown attributes
                     BpafInner::Unknown(u) => {
