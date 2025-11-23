@@ -425,7 +425,7 @@ impl FieldAttrs {
                     BpafInner::FallbackToUsage(v) => {
                         return struct_level_attr_error(v, "fallback_to_usage")
                     }
-                    BpafInner::Path(v) => return struct_level_attr_error(v, "bpaf_path"),
+                    BpafInner::Path(v) => return struct_level_attr_error(v, "path"),
                     BpafInner::Generate(v) => return struct_level_attr_error(v, "generate"),
                     BpafInner::Private(v) => return struct_level_attr_error(v, "private"),
                     BpafInner::Boxed(v) => return struct_level_attr_error(v, "boxed"),
