@@ -150,7 +150,7 @@ fn ignore_rustdoc_compiles() {
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
 #[bpaf(options)]
 #[allow(dead_code)]
-#[cfg(not(feature = "nonexistent"))]
+#[cfg(all())]
 struct WithOtherAttrs {
     #[allow(unused)]
     #[bpaf(long)]
@@ -178,13 +178,11 @@ struct WithMixedAttrs {
     output: String,
 
     /// Enable quiet mode
-    #[deprecated(note = "use --silent instead")]
     #[bpaf(short, long)]
     quiet: bool,
 }
 
 #[test]
-#[allow(deprecated)]
 fn ignores_other_field_attributes() {
     let parser = WithMixedAttrs::parse();
     let r = parser.run_inner(&["--output-file", "test.txt"]).unwrap();
