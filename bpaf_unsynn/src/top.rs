@@ -1274,9 +1274,8 @@ impl Top {
         };
 
         // Handle env-only fields (no short/long)
-        if base_parser.is_none() && env_spec.is_some() {
+        if let (None, Some(ref env_expr)) = (&base_parser, &env_spec) {
             // Use #bpaf::env() directly for env-only fields
-            let env_expr = env_spec.as_ref().unwrap();
             base_parser = Some(quote! { #bpaf::env(#env_expr) });
         } else if let Some(ref env_expr) = env_spec {
             // Chain .env() onto existing short/long parser
@@ -1311,8 +1310,18 @@ impl Top {
 
             // All other cases need base_parser
             _ => {
-                let base_parser =
-                    base_parser.expect("base_parser should be Some for named consumers");
+                let base_parser = match base_parser {
+                    Some(bp) => bp,
+                    None => {
+                        // This should be unreachable with current logic, but provide a helpful error
+                        let error_msg = format!(
+                            "Internal error: field '{}' requires a base parser (short/long/env), but none was generated. \
+                             This is a bug in the derive macro. Please report this at https://github.com/pacak/bpaf",
+                            field_name_str
+                        );
+                        return quote! { compile_error!(#error_msg) };
+                    }
+                };
 
                 match consumer {
                     Some(ConsumerType::Switch) => {
