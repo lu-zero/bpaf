@@ -287,15 +287,35 @@ fn private_parser_compiles() {
 
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
 #[bpaf(options, boxed)]
-struct BoxedParser {
+struct BoxedOptionsParser {
     value: String,
 }
 
 #[test]
-fn boxed_parser_compiles() {
-    let parser = BoxedParser::parse();
+fn boxed_options_parser_compiles() {
+    let parser = BoxedOptionsParser::parse();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
+}
+
+/// Boxed in parser mode (not options) - for use in composition
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(parser, boxed)]
+struct BoxedParserMode {
+    #[bpaf(long)]
+    flag: bool,
+}
+
+#[test]
+fn boxed_parser_mode_compiles() {
+    // In parser mode, we get a Parser, not OptionParser
+    // Wrap it in to_options() to test
+    let parser = BoxedParserMode::parse().to_options();
+    let r = parser.run_inner(&["--flag"]).unwrap();
+    assert!(r.flag);
+
+    let r = parser.run_inner(&[]).unwrap();
+    assert!(!r.flag);
 }
 
 // =============================================================================
