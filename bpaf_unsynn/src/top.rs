@@ -140,18 +140,11 @@ fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
     Ok(fields)
 }
 
-/// Parse tuple variant fields from a parenthesis group
-/// Supports multi-field tuple variants with attributes
-fn parse_tuple_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
-    use crate::parsing::TupleField;
-
-    let stream = group.stream();
-    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-
-    // Parse comma-delimited tuple fields
-    let tuple_fields: CommaDelimitedVec<TupleField> = iter.parse()?;
-
+/// Convert parsed tuple fields to StructField vec
+/// Takes already-parsed TupleFields from unsynn
+fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
     tuple_fields
+        .content
         .into_iter()
         .enumerate()
         .map(|(field_index, delimited)| {
@@ -219,20 +212,16 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
             // Get variant name
             let name: Ident = t.parse()?;
 
-            // Check for variant fields
-            let (fields, is_tuple) = match t.next() {
-                // Struct-style variant: Variant { field: Type, ... }
-                Some(TokenTree::Group(ref g)) if g.delimiter() == proc_macro2::Delimiter::Brace => {
-                    (parse_fields(g)?, false)
-                }
+            // Check for variant fields using unsynn parsing
+            let (fields, is_tuple) = if let Ok(tuple_fields) = t.parse::<TupleFields>() {
                 // Tuple-style variant: Variant(Type)
-                Some(TokenTree::Group(ref g))
-                    if g.delimiter() == proc_macro2::Delimiter::Parenthesis =>
-                {
-                    (parse_tuple_fields(g)?, true)
-                }
+                (convert_tuple_fields(tuple_fields)?, true)
+            } else if let Ok(brace_group) = t.parse::<BraceGroup>() {
+                // Struct-style variant: Variant { field: Type, ... }
+                (parse_fields(&brace_group.0)?, false)
+            } else {
                 // Unit variant
-                _ => (Vec::new(), false),
+                (Vec::new(), false)
             };
 
             Ok(EnumBranch {

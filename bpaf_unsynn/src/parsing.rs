@@ -812,6 +812,10 @@ impl AnyArgs {
 /// Uses unsynn's built-in Pound operator and BracketGroupContaining for typed parsing
 pub type FullAttribute = Cons<Pound, BracketGroupContaining<Attribute>>;
 
+/// Parsed tuple variant fields: (Type1, #[attr] Type2, ...)
+/// Used for parsing tuple struct/variant fields with typed content
+pub type TupleFields = ParenthesisGroupContaining<CommaDelimitedVec<TupleField>>;
+
 unsynn! {
     /// A tuple field: optional attributes, optional visibility, type
     /// Example: `#[bpaf(long("to"))] String` or just `String`
