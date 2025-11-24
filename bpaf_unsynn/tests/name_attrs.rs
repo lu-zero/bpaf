@@ -170,6 +170,129 @@ fn env_from_constant() {
 }
 
 // =============================================================================
+// Env-only fields (no short/long)
+// =============================================================================
+
+/// Field with only env attribute - no command line option, only environment variable
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct EnvOnlySet {
+    #[bpaf(env("ENV_ONLY_SET_VAR"))]
+    value: Option<String>,
+}
+
+#[test]
+fn env_only_reads_from_environment() {
+    std::env::set_var("ENV_ONLY_SET_VAR", "env_value");
+
+    let parser = EnvOnlySet::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.value, Some("env_value".to_string()));
+
+    std::env::remove_var("ENV_ONLY_SET_VAR");
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct EnvOnlyUnset {
+    #[bpaf(env("ENV_ONLY_UNSET_VAR"))]
+    value: Option<String>,
+}
+
+#[test]
+fn env_only_returns_none_when_unset() {
+    // Make sure the var is not set
+    std::env::remove_var("ENV_ONLY_UNSET_VAR");
+
+    let parser = EnvOnlyUnset::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.value, None);
+}
+
+/// Env-only with a required field (uses fallback)
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct EnvOnlyRequiredSet {
+    #[bpaf(env("ENV_REQUIRED_SET_VAR"), fallback("default_value".to_string()))]
+    value: String,
+}
+
+#[test]
+fn env_only_required_uses_env() {
+    std::env::set_var("ENV_REQUIRED_SET_VAR", "from_env");
+
+    let parser = EnvOnlyRequiredSet::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.value, "from_env");
+
+    std::env::remove_var("ENV_REQUIRED_SET_VAR");
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct EnvOnlyRequiredUnset {
+    #[bpaf(env("ENV_REQUIRED_UNSET_VAR"), fallback("default_value".to_string()))]
+    value: String,
+}
+
+#[test]
+fn env_only_required_uses_fallback() {
+    std::env::remove_var("ENV_REQUIRED_UNSET_VAR");
+
+    let parser = EnvOnlyRequiredUnset::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.value, "default_value");
+}
+
+/// Env-only with numeric type
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct EnvOnlyNumeric {
+    #[bpaf(env("ENV_PORT"))]
+    port: Option<u16>,
+}
+
+#[test]
+fn env_only_numeric_parses() {
+    std::env::set_var("ENV_PORT", "8080");
+
+    let parser = EnvOnlyNumeric::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.port, Some(8080));
+
+    std::env::remove_var("ENV_PORT");
+}
+
+/// Multiple env-only fields
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct MultipleEnvOnly {
+    #[bpaf(env("DB_HOST"))]
+    host: Option<String>,
+    #[bpaf(env("DB_PORT"))]
+    port: Option<u16>,
+    #[bpaf(env("DB_NAME"))]
+    database: Option<String>,
+}
+
+#[test]
+fn multiple_env_only_fields() {
+    std::env::set_var("DB_HOST", "localhost");
+    std::env::set_var("DB_PORT", "5432");
+    std::env::set_var("DB_NAME", "mydb");
+
+    let parser = MultipleEnvOnly::parse();
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.host, Some("localhost".to_string()));
+    assert_eq!(r.port, Some(5432));
+    assert_eq!(r.database, Some("mydb".to_string()));
+
+    std::env::remove_var("DB_HOST");
+    std::env::remove_var("DB_PORT");
+    std::env::remove_var("DB_NAME");
+}
+
+// =============================================================================
 // All three combined: short, long, env
 // =============================================================================
 
