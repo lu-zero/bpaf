@@ -914,26 +914,26 @@ impl ToTokens for Top {
             parser_body = self.apply_post(parser_body, attr);
         }
 
-        // Apply .boxed() if requested (must be before .to_options())
-        if self.boxed {
-            parser_body = quote! { #parser_body.boxed() };
-        }
-
         // Get the bpaf crate path
         let bpaf = self.bpaf_crate();
 
         // Apply mode-specific wrappers
         match &self.mode {
             Mode::Options { options } => {
+                // Apply cargo_helper BEFORE .to_options() (wraps the Parser)
+                if let Some(ref cargo_helper) = options.cargo_helper {
+                    parser_body = quote! { #bpaf::cargo_helper(#cargo_helper, #parser_body) };
+                }
                 // Add .to_options()
                 parser_body = quote! { #parser_body.to_options() };
-                // Apply options configuration
+                // Apply options configuration (excluding cargo_helper which was already applied)
                 parser_body = self.apply_options_cfg(parser_body, options, &bpaf);
             }
             Mode::Command { command, options } => {
                 // Add .to_options() first
                 parser_body = quote! { #parser_body.to_options() };
                 // Apply options configuration BEFORE calling .command()
+                // Note: cargo_helper is ignored in command mode (same as bpaf_derive)
                 parser_body = self.apply_options_cfg(parser_body, options, &bpaf);
                 // Then add .command("name")
                 // ParseCommand<T> implements Parser<T> so we can return it as impl Parser<T>
@@ -951,16 +951,26 @@ impl ToTokens for Top {
                 if let Some(ref help) = command.help {
                     parser_body = quote! { #parser_body.help(#help) };
                 }
+
+                // Apply .boxed() AFTER .command() for command mode
+                if self.boxed {
+                    parser_body = quote! { #parser_body.boxed() };
+                }
             }
             Mode::Parser { parser: parser_cfg } => {
                 // Apply parser configuration (group_help)
                 if let Some(ref group_help) = parser_cfg.group_help {
                     parser_body = quote! { #parser_body.group_help(#group_help) };
                 }
+
+                // Apply .boxed() at the end for parser mode
+                if self.boxed {
+                    parser_body = quote! { #parser_body.boxed() };
+                }
             }
         }
 
-        // Generate return type based on mode (boxed changes return type for parser mode)
+        // Generate return type based on mode (boxed changes return type for parser/command mode)
         let return_type = match (&self.mode, self.boxed) {
             (Mode::Options { .. }, _) => quote! { #bpaf::OptionParser<Self> },
             (Mode::Command { .. }, true) | (Mode::Parser { .. }, true) => {
@@ -1009,7 +1019,7 @@ impl Top {
         &self,
         mut parser: TokenStream,
         cfg: &crate::mode::OptionsCfg,
-        bpaf: &TokenStream,
+        _bpaf: &TokenStream,
     ) -> TokenStream {
         // Apply descr
         if let Some(ref descr) = cfg.descr {
@@ -1039,12 +1049,8 @@ impl Top {
         if cfg.fallback_usage {
             parser = quote! { #parser.fallback_to_usage() };
         }
-        // Apply cargo_helper (wraps the whole thing)
-        if let Some(ref cargo_helper) = cfg.cargo_helper {
-            parser = quote! {
-                #bpaf::cargo_helper(#cargo_helper, #parser)
-            };
-        }
+        // Note: cargo_helper is handled in to_tokens() before .to_options()
+        // It's ignored in command mode (same as bpaf_derive)
         parser
     }
 
@@ -1161,13 +1167,15 @@ impl Top {
                     // Regular flag-based variant (no command attribute)
                     if variant.fields.is_empty() {
                         // Unit variant - use long/short flags
-                        let base = quote! {
-                            #bpaf::long(#command_name).req_flag(#enum_name::#variant_name)
-                        };
+                        // Note: .help() must be called BEFORE .req_flag() (on NamedArg, not Parser)
                         if let Some(help) = help_text {
-                            quote! { #base.help(#help) }
+                            quote! {
+                                #bpaf::long(#command_name).help(#help).req_flag(#enum_name::#variant_name)
+                            }
                         } else {
-                            base
+                            quote! {
+                                #bpaf::long(#command_name).req_flag(#enum_name::#variant_name)
+                            }
                         }
                     } else {
                         // Variant with fields - construct from fields

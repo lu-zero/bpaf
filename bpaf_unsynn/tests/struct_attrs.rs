@@ -91,6 +91,109 @@ fn command_explicit_name_derived_fails() {
 }
 
 // =============================================================================
+// Command with short alias
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(command("install"), short('i'))]
+struct InstallCmd {
+    package: String,
+}
+
+#[test]
+fn command_with_short_alias() {
+    let parser = InstallCmd::parse().to_options();
+
+    // Primary command name
+    let r = parser.run_inner(&["install", "--package", "foo"]).unwrap();
+    assert_eq!(r.package, "foo");
+
+    // Short alias
+    let r = parser.run_inner(&["i", "--package", "bar"]).unwrap();
+    assert_eq!(r.package, "bar");
+}
+
+// =============================================================================
+// Command with long alias
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(command("rm"), long("remove"))]
+struct RemoveCmd {
+    target: String,
+}
+
+#[test]
+fn command_with_long_alias() {
+    let parser = RemoveCmd::parse().to_options();
+
+    // Primary command name
+    let r = parser.run_inner(&["rm", "--target", "foo"]).unwrap();
+    assert_eq!(r.target, "foo");
+
+    // Long alias
+    let r = parser.run_inner(&["remove", "--target", "bar"]).unwrap();
+    assert_eq!(r.target, "bar");
+}
+
+// =============================================================================
+// Command with both short and long aliases
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(command("update"), short('u'), long("upgrade"))]
+struct UpdateCmd {
+    all: bool,
+}
+
+#[test]
+fn command_with_both_aliases() {
+    let parser = UpdateCmd::parse().to_options();
+
+    // Primary command name
+    let r = parser.run_inner(&["update"]).unwrap();
+    assert!(!r.all);
+
+    // Short alias
+    let r = parser.run_inner(&["u", "--all"]).unwrap();
+    assert!(r.all);
+
+    // Long alias
+    let r = parser.run_inner(&["upgrade"]).unwrap();
+    assert!(!r.all);
+}
+
+// =============================================================================
+// Command with help attribute
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(command("deploy"), help("Deploy the application to production"))]
+struct DeployCmd {
+    #[bpaf(long)]
+    force: bool,
+}
+
+#[test]
+fn command_with_help() {
+    let parser = DeployCmd::parse().to_options();
+
+    let r = parser.run_inner(&["deploy"]).unwrap();
+    assert!(!r.force);
+
+    let r = parser.run_inner(&["deploy", "--force"]).unwrap();
+    assert!(r.force);
+
+    // Verify help text appears in help output
+    let help = parser.run_inner(&["--help"]).unwrap_err().unwrap_stdout();
+    assert!(
+        help.contains("Deploy the application to production"),
+        "Help should contain command help text: {}",
+        help
+    );
+}
+
+// =============================================================================
 // Adjacent attribute
 // =============================================================================
 
@@ -371,6 +474,131 @@ struct TopLevelCustomUsage {
 #[test]
 fn top_level_custom_usage_compiles() {
     let parser = TopLevelCustomUsage::parse();
+    let r = parser.run_inner(&["--verbose"]).unwrap();
+    assert!(r.verbose);
+}
+
+// =============================================================================
+// Struct-level guard attribute
+// =============================================================================
+
+fn check_value_positive(opts: &TopLevelGuard) -> bool {
+    opts.value > 0
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(guard(check_value_positive, "value must be positive"))]
+struct TopLevelGuard {
+    #[bpaf(long, argument("NUM"))]
+    value: i32,
+}
+
+#[test]
+fn top_level_guard_passes() {
+    let parser = TopLevelGuard::parse().to_options();
+    let r = parser.run_inner(&["--value", "42"]).unwrap();
+    assert_eq!(r.value, 42);
+}
+
+#[test]
+fn top_level_guard_fails() {
+    let parser = TopLevelGuard::parse().to_options();
+    let r = parser.run_inner(&["--value", "-5"]);
+    assert!(r.is_err());
+}
+
+// =============================================================================
+// Struct-level fallback_with attribute
+// =============================================================================
+
+fn default_opts() -> Result<TopLevelFallbackWith, String> {
+    Ok(TopLevelFallbackWith { value: 100 })
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(fallback_with(default_opts))]
+struct TopLevelFallbackWith {
+    #[bpaf(long, argument("NUM"))]
+    value: i32,
+}
+
+#[test]
+fn top_level_fallback_with_uses_fallback() {
+    let parser = TopLevelFallbackWith::parse().to_options();
+    // No arguments - should use fallback
+    let r = parser.run_inner(&[]).unwrap();
+    assert_eq!(r.value, 100);
+}
+
+#[test]
+fn top_level_fallback_with_uses_value() {
+    let parser = TopLevelFallbackWith::parse().to_options();
+    let r = parser.run_inner(&["--value", "42"]).unwrap();
+    assert_eq!(r.value, 42);
+}
+
+// =============================================================================
+// Struct-level complete attribute
+// =============================================================================
+
+fn struct_completer(_opts: &TopLevelComplete) -> Vec<(&'static str, Option<&'static str>)> {
+    vec![("option1", Some("First")), ("option2", None)]
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(complete(struct_completer))]
+struct TopLevelComplete {
+    #[bpaf(long, argument("VAL"))]
+    value: String,
+}
+
+#[test]
+fn top_level_complete_compiles() {
+    let parser = TopLevelComplete::parse().to_options();
+    let r = parser.run_inner(&["--value", "test"]).unwrap();
+    assert_eq!(r.value, "test");
+}
+
+// =============================================================================
+// Struct-level complete + group attributes (group requires complete first)
+// =============================================================================
+
+fn struct_completer_with_group(
+    _opts: &TopLevelCompleteAndGroup,
+) -> Vec<(&'static str, Option<&'static str>)> {
+    vec![("opt1", Some("First")), ("opt2", None)]
+}
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(complete(struct_completer_with_group), group("main_group"))]
+struct TopLevelCompleteAndGroup {
+    #[bpaf(long)]
+    verbose: bool,
+}
+
+#[test]
+fn top_level_complete_and_group_compiles() {
+    let parser = TopLevelCompleteAndGroup::parse().to_options();
+    let r = parser.run_inner(&["--verbose"]).unwrap();
+    assert!(r.verbose);
+}
+
+// =============================================================================
+// cargo_helper + options mode
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options, cargo_helper("mycargo"))]
+struct CargoHelperOptions {
+    #[bpaf(long)]
+    verbose: bool,
+}
+
+#[test]
+fn cargo_helper_with_options_mode() {
+    let parser = CargoHelperOptions::parse();
+    // cargo_helper strips the first argument if it matches "mycargo"
+    // With normal args (not starting with "mycargo"), it works as normal
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }

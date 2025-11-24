@@ -631,3 +631,112 @@ fn command_with_short_and_long_alias() {
     let r = parser.run_inner(&["upgrade"]).unwrap();
     assert_eq!(r, CmdWithBothAliases::Update);
 }
+
+// =============================================================================
+// Non-command enum variants with fields (flag-based with struct fields)
+// =============================================================================
+
+/// Enum variant without #[bpaf(command)] but with struct fields.
+/// This exercises the code path for flag-based variants with fields.
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+enum FlagVariantWithFields {
+    /// Variant with fields but no command
+    Enabled {
+        #[bpaf(long, argument("LEVEL"))]
+        level: u32,
+    },
+}
+
+#[test]
+fn flag_variant_with_struct_fields() {
+    let parser = FlagVariantWithFields::parse().to_options();
+
+    let r = parser.run_inner(&["--level", "5"]).unwrap();
+    assert_eq!(r, FlagVariantWithFields::Enabled { level: 5 });
+}
+
+/// Enum with multiple non-command struct variants
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+enum MultiVariantNoCommand {
+    /// First option
+    First {
+        #[bpaf(long, argument("A"))]
+        alpha: String,
+    },
+    /// Second option
+    Second {
+        #[bpaf(long, argument("B"))]
+        beta: i32,
+    },
+}
+
+#[test]
+fn multi_variant_without_command() {
+    let parser = MultiVariantNoCommand::parse().to_options();
+
+    let r = parser.run_inner(&["--alpha", "test"]).unwrap();
+    assert_eq!(
+        r,
+        MultiVariantNoCommand::First {
+            alpha: "test".to_string()
+        }
+    );
+
+    let r = parser.run_inner(&["--beta", "42"]).unwrap();
+    assert_eq!(r, MultiVariantNoCommand::Second { beta: 42 });
+}
+
+// =============================================================================
+// Unit enum variant (non-command) with help text via doc comments
+// =============================================================================
+
+/// Enum with unit variants that have help text via doc comments
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+enum UnitVariantWithHelp {
+    /// Enable verbose mode
+    Verbose,
+    /// Enable quiet mode
+    Quiet,
+}
+
+#[test]
+fn unit_variant_with_help_text() {
+    let parser = UnitVariantWithHelp::parse().to_options();
+
+    let r = parser.run_inner(&["--verbose"]).unwrap();
+    assert_eq!(r, UnitVariantWithHelp::Verbose);
+
+    let r = parser.run_inner(&["--quiet"]).unwrap();
+    assert_eq!(r, UnitVariantWithHelp::Quiet);
+
+    // Check help output has the doc comments
+    let help = parser.run_inner(&["--help"]).unwrap_err().unwrap_stdout();
+    assert!(
+        help.contains("verbose mode"),
+        "Help should contain 'verbose mode': {}",
+        help
+    );
+}
+
+// =============================================================================
+// Boxed command mode (struct level)
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(command, boxed)]
+struct BoxedCmd {
+    #[bpaf(long)]
+    verbose: bool,
+}
+
+#[test]
+fn boxed_command_mode() {
+    let parser = BoxedCmd::parse().to_options();
+
+    let r = parser.run_inner(&["boxedcmd"]).unwrap();
+    assert!(!r.verbose);
+
+    let r = parser.run_inner(&["boxedcmd", "--verbose"]).unwrap();
+    assert!(r.verbose);
+}
+
