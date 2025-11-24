@@ -829,74 +829,51 @@ impl Parser for Top {
         // Get the struct/enum name
         let name: Ident = input.parse()?;
 
-        // Skip generics if present (we'll handle them later)
-        // Look for a group (< for generics or { for fields/variants)
-        loop {
-            match input.next() {
-                Some(TokenTree::Punct(ref p)) if p.as_char() == '<' => {
-                    // Skip until we find matching >
-                    // Simple depth counting for now
-                    let mut depth = 1;
-                    while depth > 0 {
-                        match input.next() {
-                            Some(TokenTree::Punct(ref p)) if p.as_char() == '<' => depth += 1,
-                            Some(TokenTree::Punct(ref p)) if p.as_char() == '>' => depth -= 1,
-                            None => break,
-                            _ => {}
+        // Skip generics and where clauses until we hit the body ({ or ;)
+        // LazyVecUntil stops before consuming the terminator
+        let _generics_and_where: unsynn::LazyVecUntil<
+            TokenTree,
+            unsynn::Either<unsynn::BraceGroup, unsynn::Semicolon>,
+        > = input.parse()?;
+
+        // Parse the body: either a brace group with fields/variants, or semicolon for unit struct
+        let body =
+            match input.parse::<unsynn::Either<unsynn::BraceGroup, unsynn::Semicolon>>()? {
+                unsynn::Either::First(body_group) => {
+                    if is_enum {
+                        let variants = parse_enum_variants(&body_group.0)?;
+                        if variants.is_empty() {
+                            return unsynn::Error::other(
+                                Some(TokenTree::Group(body_group.0)),
+                                &input,
+                                "Enums must have at least one variant".to_string(),
+                            );
                         }
-                    }
-                }
-                Some(TokenTree::Group(ref g)) if g.delimiter() == proc_macro2::Delimiter::Brace => {
-                    // Parse the content
-                    let body = if is_enum {
-                        // Parse enum variants
-                        let variants = parse_enum_variants(g)?;
                         Body::Enum(variants)
                     } else {
-                        // Parse struct fields
-                        let fields = parse_fields(g)?;
-                        Body::Struct(fields)
-                    };
-                    // Consume remaining tokens (semicolon, etc.)
-                    while input.next().is_some() {}
-                    return Ok(Top {
-                        name,
-                        body,
-                        adjacent,
-                        mode,
-                        fallback,
-                        bpaf_path,
-                        custom_name,
-                        private,
-                        boxed,
-                        attrs: top_attrs,
-                    });
+                        Body::Struct(parse_fields(&body_group.0)?)
+                    }
                 }
-                None => {
-                    // End of input - return with empty body
-                    let body = if is_enum {
-                        Body::Enum(Vec::new())
-                    } else {
-                        Body::Struct(Vec::new())
-                    };
-                    return Ok(Top {
-                        name,
-                        body,
-                        adjacent,
-                        mode,
-                        fallback,
-                        bpaf_path,
-                        custom_name,
-                        private,
-                        boxed,
-                        attrs: top_attrs,
-                    });
+                unsynn::Either::Second(_semicolon) => {
+                    // Unit struct is fine; unit enum (enum Foo;) is invalid Rust
+                    // syntax so the compiler will reject it anyway
+                    Body::Struct(Vec::new())
                 }
-                _ => {
-                    // Continue looking for the brace group
-                }
-            }
-        }
+                _ => unreachable!(),
+            };
+
+        Ok(Top {
+            name,
+            body,
+            adjacent,
+            mode,
+            fallback,
+            bpaf_path,
+            custom_name,
+            private,
+            boxed,
+            attrs: top_attrs,
+        })
     }
 }
 
