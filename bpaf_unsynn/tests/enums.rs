@@ -740,3 +740,209 @@ fn boxed_command_mode() {
     assert!(r.verbose);
 }
 
+// =============================================================================
+// Tuple variants - additional tests
+// =============================================================================
+
+/// Tuple variant with multiple types (all positional by default)
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleMultiType {
+    #[bpaf(command)]
+    Transfer(String, u32),
+    #[bpaf(command)]
+    Query(String),
+}
+
+#[test]
+fn tuple_variant_multiple_types() {
+    let parser = TupleMultiType::parse();
+
+    let r = parser.run_inner(&["transfer", "account", "100"]).unwrap();
+    assert_eq!(
+        r,
+        TupleMultiType::Transfer("account".to_string(), 100)
+    );
+
+    let r = parser.run_inner(&["query", "status"]).unwrap();
+    assert_eq!(r, TupleMultiType::Query("status".to_string()));
+}
+
+/// Tuple variant with optional type
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleWithOption {
+    #[bpaf(command)]
+    Fetch(String, Option<u32>),
+}
+
+#[test]
+fn tuple_variant_with_option_type() {
+    let parser = TupleWithOption::parse();
+
+    // With optional value
+    let r = parser.run_inner(&["fetch", "data", "5"]).unwrap();
+    assert_eq!(
+        r,
+        TupleWithOption::Fetch("data".to_string(), Some(5))
+    );
+
+    // Without optional value
+    let r = parser.run_inner(&["fetch", "data"]).unwrap();
+    assert_eq!(r, TupleWithOption::Fetch("data".to_string(), None));
+}
+
+/// Tuple variant with Vec type
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleWithVec {
+    #[bpaf(command)]
+    Process(String, Vec<String>),
+}
+
+#[test]
+fn tuple_variant_with_vec_type() {
+    let parser = TupleWithVec::parse();
+
+    let r = parser
+        .run_inner(&["process", "task", "arg1", "arg2", "arg3"])
+        .unwrap();
+    assert_eq!(
+        r,
+        TupleWithVec::Process(
+            "task".to_string(),
+            vec!["arg1".to_string(), "arg2".to_string(), "arg3".to_string()]
+        )
+    );
+
+    // Empty vec
+    let r = parser.run_inner(&["process", "task"]).unwrap();
+    assert_eq!(
+        r,
+        TupleWithVec::Process("task".to_string(), vec![])
+    );
+}
+
+// =============================================================================
+// Tuple variants with field attributes
+// =============================================================================
+
+/// Tuple variant with explicit field attributes
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleWithFieldAttrs {
+    #[bpaf(command)]
+    Send(
+        #[bpaf(long("to"), argument("ADDR"))]
+        String,
+        #[bpaf(positional("MESSAGE"))]
+        String,
+    ),
+    #[bpaf(command)]
+    Receive(
+        #[bpaf(long("from"), argument("ADDR"))]
+        String,
+    ),
+}
+
+#[test]
+fn tuple_variant_with_field_attributes() {
+    let parser = TupleWithFieldAttrs::parse();
+
+    let r = parser
+        .run_inner(&["send", "--to", "alice@example.com", "Hello!"])
+        .unwrap();
+    assert_eq!(
+        r,
+        TupleWithFieldAttrs::Send("alice@example.com".to_string(), "Hello!".to_string())
+    );
+
+    let r = parser
+        .run_inner(&["receive", "--from", "bob@example.com"])
+        .unwrap();
+    assert_eq!(
+        r,
+        TupleWithFieldAttrs::Receive("bob@example.com".to_string())
+    );
+}
+
+/// Tuple variant with mixed named and positional fields
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleMixedAttrs {
+    #[bpaf(command)]
+    Create(
+        #[bpaf(positional("NAME"))]
+        String,
+        #[bpaf(long("count"), argument("COUNT"))]
+        u32,
+        #[bpaf(short('v'), long("verbose"))]
+        bool,
+    ),
+}
+
+#[test]
+fn tuple_variant_mixed_field_attrs() {
+    let parser = TupleMixedAttrs::parse();
+
+    let r = parser
+        .run_inner(&["create", "myfile", "--count", "5", "--verbose"])
+        .unwrap();
+    assert_eq!(r, TupleMixedAttrs::Create("myfile".to_string(), 5, true));
+
+    // Without optional flag
+    let r = parser
+        .run_inner(&["create", "other", "--count", "10"])
+        .unwrap();
+    assert_eq!(r, TupleMixedAttrs::Create("other".to_string(), 10, false));
+}
+
+/// Tuple variant with optional field via attribute
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleOptionalAttr {
+    #[bpaf(command)]
+    Run(
+        #[bpaf(positional("SCRIPT"))]
+        String,
+        #[bpaf(long("arg"))]
+        Option<String>,
+    ),
+}
+
+#[test]
+fn tuple_variant_optional_field_attr() {
+    let parser = TupleOptionalAttr::parse();
+
+    let r = parser.run_inner(&["run", "script.sh"]).unwrap();
+    assert_eq!(r, TupleOptionalAttr::Run("script.sh".to_string(), None));
+
+    let r = parser
+        .run_inner(&["run", "script.sh", "--arg", "value"])
+        .unwrap();
+    assert_eq!(
+        r,
+        TupleOptionalAttr::Run("script.sh".to_string(), Some("value".to_string()))
+    );
+}
+
+/// Tuple variant with doc comment on field
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleWithDocs {
+    #[bpaf(command)]
+    Echo(
+        /// The message to echo
+        #[bpaf(positional("MSG"))]
+        String,
+    ),
+}
+
+#[test]
+fn tuple_variant_with_doc_on_field() {
+    let parser = TupleWithDocs::parse();
+
+    let r = parser.run_inner(&["echo", "hello"]).unwrap();
+    assert_eq!(r, TupleWithDocs::Echo("hello".to_string()));
+}
+
