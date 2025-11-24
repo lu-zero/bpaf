@@ -644,13 +644,8 @@ fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
 
             // PostDecor attributes at struct/enum level
             BpafInner::Guard(gi) => {
-                let stream = gi.args.0.stream();
-                let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-                let (check, msg) = if let Ok(two_args) = iter.parse::<crate::parsing::TwoArgs>() {
-                    two_args.into_streams()
-                } else {
-                    (stream.clone(), proc_macro2::TokenStream::new())
-                };
+                let (check, msg) =
+                    crate::attrs::parse_two_args(&gi.args.0, "guard", "check_fn, error_message")?;
                 top_attrs.push(Post::Decor(PostDecor::Guard { check, msg }));
             }
             BpafInner::Hide(_) => {

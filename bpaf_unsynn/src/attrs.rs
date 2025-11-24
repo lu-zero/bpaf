@@ -129,7 +129,7 @@ pub enum PostDecor {
 /// Helper function to parse and extract two comma-separated arguments
 /// The TwoArgs grammar requires exactly 2 non-empty arguments with a comma separator
 /// Returns an error if parsing fails (missing comma, empty arguments, etc.)
-fn parse_two_args(
+pub fn parse_two_args(
     group: &proc_macro2::Group,
     attr_name: &str,
     arg_description: &str,
