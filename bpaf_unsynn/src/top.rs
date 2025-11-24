@@ -811,12 +811,20 @@ impl Parser for Top {
         let _ = input.parse::<crate::parsing::Visibility>();
 
         // Expect "struct" or "enum" keyword
-        let keyword: Ident = input.parse()?;
-        let keyword_str = keyword.to_string();
-        let is_enum = keyword_str == "enum";
-        if keyword_str != "struct" && !is_enum {
-            return Err(Error::no_error());
-        }
+        use crate::parsing::{KEnum, KStruct};
+        let first_token = input.clone().next();
+        let is_enum = match input.parse::<unsynn::Either<KStruct, KEnum>>() {
+            Ok(unsynn::Either::First(_)) => false,
+            Ok(unsynn::Either::Second(_)) => true,
+            Ok(_) => unreachable!(),
+            Err(_) => {
+                return unsynn::Error::other(
+                    first_token,
+                    &input,
+                    "Only structs and enums are supported".to_string(),
+                );
+            }
+        };
 
         // Get the struct/enum name
         let name: Ident = input.parse()?;
