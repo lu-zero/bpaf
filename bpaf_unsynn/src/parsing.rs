@@ -154,7 +154,7 @@ keyword! {
 }
 
 // Common operators - use predefined operators from unsynn
-pub use unsynn::operator::names::{Assign, Colon, Comma, Gt, Lt};
+pub use unsynn::operator::names::{Assign, Colon, Comma, Gt, Lt, Pound};
 // Alias for backward compatibility (Eq -> Assign)
 pub type Eq = Assign;
 
@@ -808,18 +808,11 @@ impl AnyArgs {
     }
 }
 
-// The # operator for attribute syntax
-operator! {
-    pub Hash = "#";
-}
+/// A full attribute: #[...]
+/// Uses unsynn's built-in Pound operator and BracketGroupContaining for typed parsing
+pub type FullAttribute = Cons<Pound, BracketGroupContaining<Attribute>>;
 
 unsynn! {
-    /// A full attribute: #[...]
-    pub struct FullAttribute {
-        pub _hash: Hash,
-        pub content: BracketGroup,
-    }
-
     /// A tuple field: optional attributes, optional visibility, type
     /// Example: `#[bpaf(long("to"))] String` or just `String`
     pub struct TupleField {
@@ -834,26 +827,17 @@ unsynn! {
 
 impl TupleField {
     /// Extract bpaf attributes and doc comments from the full attributes
-    pub fn extract_attrs(&self) -> (Vec<BpafAttr>, Vec<DocInner>) {
+    pub fn extract_attrs(self) -> (Vec<BpafAttr>, Vec<DocInner>) {
         let mut bpaf_attrs = Vec::new();
         let mut doc_comments = Vec::new();
 
-        for attr in &self.attrs {
-            let stream = attr.content.0.stream();
-            let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-
-            // Try to parse as bpaf attribute
-            if let Ok(bpaf) = iter.parse::<BpafAttr>() {
-                bpaf_attrs.push(bpaf);
-                continue;
+        for attr in self.attrs {
+            // Attribute is already parsed via BracketGroupContaining<Attribute>
+            match attr.second.content {
+                Attribute::Bpaf(bpaf) => bpaf_attrs.push(bpaf),
+                Attribute::Doc(doc) => doc_comments.push(doc),
+                Attribute::Other(_) => {} // Ignored
             }
-
-            // Reset and try to parse as doc attribute
-            let mut iter = unsynn::ToTokens::to_token_iter(&stream);
-            if let Ok(doc) = iter.parse::<DocInner>() {
-                doc_comments.push(doc);
-            }
-            // Other attributes are ignored
         }
 
         (bpaf_attrs, doc_comments)
