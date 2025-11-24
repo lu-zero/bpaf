@@ -143,79 +143,59 @@ fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
 /// Parse tuple variant fields from a parenthesis group
 /// Supports multi-field tuple variants with attributes
 fn parse_tuple_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
+    use crate::parsing::TupleField;
+
     let stream = group.stream();
     let mut iter = unsynn::ToTokens::to_token_iter(&stream);
 
-    let mut fields = Vec::new();
-    let mut field_index: usize = 0;
+    // Parse comma-delimited tuple fields
+    let tuple_fields: CommaDelimitedVec<TupleField> = iter.parse()?;
 
-    loop {
-        // Try to parse a field with attributes
-        let field_result = iter.transaction(|t| {
-            // Collect bpaf attributes and doc comments
-            let (bpaf_attrs, doc_comments) = collect_attributes(t);
+    tuple_fields
+        .into_iter()
+        .enumerate()
+        .map(|(field_index, delimited)| {
+            let field = delimited.value;
+            let ty_tokens = unsynn::ToTokens::to_token_stream(&field.ty);
 
-            // Skip visibility if present
-            let _ = t.parse::<crate::parsing::Visibility>();
-
-            // Collect type tokens until comma or end using VerbatimUntilComma
-            let ty_verbatim: VerbatimUntilComma = t.parse()?;
-            let ty_tokens = unsynn::ToTokens::to_token_stream(&ty_verbatim);
-
-            // Check if we got any tokens (empty means we're done)
+            // Skip empty types (trailing comma case)
             if ty_tokens.is_empty() {
-                return unsynn::Error::other(
-                    None::<proc_macro2::TokenTree>,
-                    t,
-                    "empty type".to_string(),
-                );
+                return Ok(None);
             }
 
-            // Consume optional trailing comma
-            let _ = t.parse::<Comma>();
-
-            // Parse type shape directly from tokens
+            // Parse type shape
             let mut ty_iter = unsynn::ToTokens::to_token_iter(&ty_tokens);
             let shape: TypeShape = ty_iter.parse()?;
 
-            Ok((ty_tokens, shape, bpaf_attrs, doc_comments))
-        });
+            // Extract bpaf attrs and doc comments
+            let (bpaf_attrs, doc_comments) = field.extract_attrs();
 
-        match field_result {
-            Ok((ty_tokens, shape, bpaf_attrs, doc_comments)) => {
-                let name = quote::format_ident!("{}{}", TUPLE_FIELD_NAME_PREFIX, field_index);
+            let name = quote::format_ident!("{}{}", TUPLE_FIELD_NAME_PREFIX, field_index);
 
-                // Parse field attributes, using positional as default for tuple fields without attrs
-                let attrs = if bpaf_attrs.is_empty() && doc_comments.is_empty() {
-                    // No attributes - use default positional
-                    FieldAttrs {
-                        consumer: Some(ConsumerType::Positional {
-                            metavar: Some(DEFAULT_POSITIONAL_METAVAR.to_string()),
-                        }),
-                        ..Default::default()
-                    }
-                } else {
-                    // Parse attributes from the collected bpaf attrs
-                    // Let the shape-based logic determine the consumer if not explicitly set
-                    FieldAttrs::parse_from_attrs(&name.to_string(), &bpaf_attrs, &doc_comments)?
-                };
+            // Parse field attributes, using positional as default for tuple fields without attrs
+            let attrs = if bpaf_attrs.is_empty() && doc_comments.is_empty() {
+                // No attributes - use default positional
+                FieldAttrs {
+                    consumer: Some(ConsumerType::Positional {
+                        metavar: Some(DEFAULT_POSITIONAL_METAVAR.to_string()),
+                    }),
+                    ..Default::default()
+                }
+            } else {
+                // Parse attributes from the collected bpaf attrs
+                // Let the shape-based logic determine the consumer if not explicitly set
+                FieldAttrs::parse_from_attrs(&name.to_string(), &bpaf_attrs, &doc_comments)?
+            };
 
-                fields.push(StructField {
-                    name,
-                    ty: ty_tokens,
-                    shape,
-                    attrs,
-                });
-                field_index += 1;
-            }
-            Err(_) => {
-                // No more fields
-                break;
-            }
-        }
-    }
-
-    Ok(fields)
+            Ok(Some(StructField {
+                name,
+                ty: ty_tokens,
+                shape,
+                attrs,
+            }))
+        })
+        .filter_map(|r| r.transpose())
+        .collect()
 }
 
 /// Parse enum variants from a brace group

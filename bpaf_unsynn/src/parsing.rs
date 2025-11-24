@@ -807,3 +807,55 @@ impl AnyArgs {
         ts
     }
 }
+
+// The # operator for attribute syntax
+operator! {
+    pub Hash = "#";
+}
+
+unsynn! {
+    /// A full attribute: #[...]
+    pub struct FullAttribute {
+        pub _hash: Hash,
+        pub content: BracketGroup,
+    }
+
+    /// A tuple field: optional attributes, optional visibility, type
+    /// Example: `#[bpaf(long("to"))] String` or just `String`
+    pub struct TupleField {
+        /// Optional attributes (#[...])
+        pub attrs: Vec<FullAttribute>,
+        /// Optional visibility (pub)
+        pub vis: Option<Visibility>,
+        /// Type tokens (until comma)
+        pub ty: VerbatimUntilComma,
+    }
+}
+
+impl TupleField {
+    /// Extract bpaf attributes and doc comments from the full attributes
+    pub fn extract_attrs(&self) -> (Vec<BpafAttr>, Vec<DocInner>) {
+        let mut bpaf_attrs = Vec::new();
+        let mut doc_comments = Vec::new();
+
+        for attr in &self.attrs {
+            let stream = attr.content.0.stream();
+            let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+
+            // Try to parse as bpaf attribute
+            if let Ok(bpaf) = iter.parse::<BpafAttr>() {
+                bpaf_attrs.push(bpaf);
+                continue;
+            }
+
+            // Reset and try to parse as doc attribute
+            let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+            if let Ok(doc) = iter.parse::<DocInner>() {
+                doc_comments.push(doc);
+            }
+            // Other attributes are ignored
+        }
+
+        (bpaf_attrs, doc_comments)
+    }
+}
