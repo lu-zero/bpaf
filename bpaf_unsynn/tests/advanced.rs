@@ -143,6 +143,56 @@ fn ignore_rustdoc_compiles() {
 }
 
 // =============================================================================
+// Ignores non-bpaf attributes
+// =============================================================================
+
+/// Struct with various non-bpaf attributes that should be ignored
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+#[allow(dead_code)]
+#[cfg(not(feature = "nonexistent"))]
+struct WithOtherAttrs {
+    #[allow(unused)]
+    #[bpaf(long)]
+    verbose: bool,
+
+    #[cfg(any())]
+    #[bpaf(long)]
+    config: Option<String>,
+}
+
+#[test]
+fn ignores_non_bpaf_attributes() {
+    let parser = WithOtherAttrs::parse();
+    let r = parser.run_inner(&["--verbose"]).unwrap();
+    assert!(r.verbose);
+}
+
+/// Struct with doc attributes on fields (common pattern with other derives)
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+#[repr(C)]
+struct WithMixedAttrs {
+    /// Output file path
+    #[bpaf(long("output-file"))]
+    output: String,
+
+    /// Enable quiet mode
+    #[deprecated(note = "use --silent instead")]
+    #[bpaf(short, long)]
+    quiet: bool,
+}
+
+#[test]
+#[allow(deprecated)]
+fn ignores_other_field_attributes() {
+    let parser = WithMixedAttrs::parse();
+    let r = parser.run_inner(&["--output-file", "test.txt"]).unwrap();
+    assert_eq!(r.output, "test.txt");
+    assert!(!r.quiet);
+}
+
+// =============================================================================
 // Path attribute (uses ::bpaf path explicitly)
 // =============================================================================
 
