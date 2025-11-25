@@ -1355,15 +1355,10 @@ impl Top {
                         let metavar_str = metavar.as_deref().unwrap_or(&field_name_str);
                         quote! { #base_parser.argument::<#ty>(#metavar_str) }
                     }
-                    Some(ConsumerType::Positional { metavar }) => {
-                        // Named positional (rare, but possible with short/long)
-                        let ty = if field.shape.is_multiple() || field.shape.is_optional() {
-                            field.shape.inner_type()
-                        } else {
-                            field.ty.clone()
-                        };
-                        let metavar_str = metavar.as_deref().unwrap_or(DEFAULT_POSITIONAL_METAVAR);
-                        quote! { #base_parser.argument::<#ty>(#metavar_str) }
+                    Some(ConsumerType::Positional { .. }) => {
+                        // This case is unreachable due to validation in attrs.rs
+                        // Positional consumer cannot be combined with base_parser (short/long)
+                        unreachable!("Positional consumer with naming attributes should be rejected during parsing")
                     }
                     Some(ConsumerType::Flag { present, absent }) => {
                         quote! { #base_parser.flag(#present, #absent) }

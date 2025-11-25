@@ -1,0 +1,5 @@
+error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because positional field doesn't take a name annotation (short/long), found Ident { sym: positional, span: #0 bytes(174..184) } at LineColumn { line: 6, column: 17 }
+ --> tests/ui/positional_with_long.rs:6:18
+  |
+6 |     #[bpaf(long, positional("FILE"))]
+  |                  ^^^^^^^^^^

@@ -223,6 +223,15 @@ impl FieldAttrs {
                 match inner {
                     // Name attributes - resolve immediately using field_name
                     BpafInner::Short(si) => {
+                        // Validate: short doesn't work with positional
+                        if matches!(field_attrs.consumer, Some(ConsumerType::Positional { .. })) {
+                            let mut iter = unsynn::ToTokens::to_token_iter(&si._kw);
+                            return unsynn::Error::other(
+                                iter.next(),
+                                &iter,
+                                "positional field doesn't take a name annotation (short/long)".to_string(),
+                            );
+                        }
                         field_attrs.short = Some(
                             si.ch
                                 .as_ref()
@@ -231,6 +240,15 @@ impl FieldAttrs {
                         );
                     }
                     BpafInner::Long(li) => {
+                        // Validate: long doesn't work with positional
+                        if matches!(field_attrs.consumer, Some(ConsumerType::Positional { .. })) {
+                            let mut iter = unsynn::ToTokens::to_token_iter(&li._kw);
+                            return unsynn::Error::other(
+                                iter.next(),
+                                &iter,
+                                "positional field doesn't take a name annotation (short/long)".to_string(),
+                            );
+                        }
                         field_attrs.long = Some(
                             li.name
                                 .as_ref()
@@ -256,6 +274,15 @@ impl FieldAttrs {
                         field_attrs.consumer = Some(ConsumerType::Argument { metavar });
                     }
                     BpafInner::Positional(pi) => {
+                        // Validate: positional doesn't take a name annotation
+                        if field_attrs.short.is_some() || field_attrs.long.is_some() {
+                            let mut iter = unsynn::ToTokens::to_token_iter(&pi._kw);
+                            return unsynn::Error::other(
+                                iter.next(),
+                                &iter,
+                                "positional field doesn't take a name annotation (short/long)".to_string(),
+                            );
+                        }
                         let metavar = pi.metavar.as_ref().map(|g| g.content.as_str().to_string());
                         field_attrs.consumer = Some(ConsumerType::Positional { metavar });
                     }

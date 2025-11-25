@@ -308,26 +308,3 @@ fn pure_with_function() {
     assert_eq!(r.value, 100);
     assert_eq!(r.name, "test");
 }
-
-// =============================================================================
-// Named Positional consumer (rare edge case: short/long + positional)
-// =============================================================================
-
-#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
-#[bpaf(options)]
-struct NamedPositional {
-    #[bpaf(short, long, positional("FILE"))]
-    input: String,
-}
-
-#[test]
-fn named_positional_with_short() {
-    let parser = NamedPositional::parse();
-
-    // When combining short/long with positional, it acts as an argument consumer
-    let r = parser.run_inner(&["-i", "file.txt"]).unwrap();
-    assert_eq!(r.input, "file.txt");
-
-    let r = parser.run_inner(&["--input", "file.txt"]).unwrap();
-    assert_eq!(r.input, "file.txt");
-}
