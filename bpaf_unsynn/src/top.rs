@@ -151,7 +151,15 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
             let field = delimited.value;
             let ty_tokens = unsynn::ToTokens::to_token_stream(&field.ty);
 
-            // Skip empty types (trailing comma case)
+            // Defensive check: unsynn's DelimitedVec should never create empty elements
+            // from trailing commas, so ty_tokens should never be empty with valid Rust syntax
+            debug_assert!(
+                !ty_tokens.is_empty(),
+                "field_index {} has empty ty_tokens - this should be unreachable",
+                field_index
+            );
+
+            // In release builds where debug_assert is removed, gracefully skip if empty
             if ty_tokens.is_empty() {
                 return Ok(None);
             }
@@ -1157,6 +1165,16 @@ impl Top {
                     }
                 } else {
                     // Regular flag-based variant (no command attribute)
+                    if has_commands && !variant.fields.is_empty() {
+                        // Non-command variants with fields in mixed enums are not supported
+                        let error_msg = format!(
+                            "Variant '{}' has fields but no #[bpaf(command)] attribute. \
+                             In enums with command variants, non-command variants must be unit variants.",
+                            variant_name
+                        );
+                        return quote! { compile_error!(#error_msg) };
+                    }
+
                     if variant.fields.is_empty() {
                         // Unit variant - use long/short flags
                         // Note: .help() must be called BEFORE .req_flag() (on NamedArg, not Parser)
@@ -1170,7 +1188,7 @@ impl Top {
                             }
                         }
                     } else {
-                        // Variant with fields - construct from fields
+                        // Pure flag-based enum with variant fields - construct from fields
                         let field_parsers: Vec<TokenStream> = variant.fields
                             .iter()
                             .map(|field| self.emit_field(field))
