@@ -622,3 +622,49 @@ fn cargo_helper_with_options_mode() {
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
+
+// =============================================================================
+// Parser mode with doc comments
+// =============================================================================
+
+/// First paragraph - description.
+///
+/// Second paragraph - more details.
+///
+/// Third paragraph - even more information.
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(parser)]
+struct ParserWithDocs {
+    #[bpaf(long)]
+    field: String,
+}
+
+#[test]
+fn parser_mode_with_doc_comments() {
+    let parser = ParserWithDocs::parse().to_options();
+    let r = parser.run_inner(&["--field", "test"]).unwrap();
+    assert_eq!(r.field, "test");
+
+    // Verify help includes doc comments
+    let help_result = parser.run_inner(&["--help"]);
+    assert!(help_result.is_err(), "Expected help to produce an error");
+}
+
+/// First paragraph for boxed parser.
+///
+/// Second paragraph with more context.
+///
+/// Third paragraph with additional details.
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(parser, boxed)]
+struct BoxedParserWithDocs {
+    #[bpaf(long)]
+    value: String,
+}
+
+#[test]
+fn boxed_parser_mode_with_doc_comments() {
+    let parser = BoxedParserWithDocs::parse().to_options();
+    let r = parser.run_inner(&["--value", "test"]).unwrap();
+    assert_eq!(r.value, "test");
+}

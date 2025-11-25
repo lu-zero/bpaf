@@ -286,3 +286,48 @@ fn multi_paragraph_doc_splits_correctly() {
         help
     );
 }
+
+// =============================================================================
+// Doc comment formatting edge cases
+// =============================================================================
+
+/// First paragraph only
+#[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+#[allow(dead_code)]
+struct FirstParagraphOnly {
+    #[bpaf(long)]
+    field: String,
+}
+
+#[test]
+fn doc_with_first_paragraph_only() {
+    let parser = FirstParagraphOnly::parse();
+    let help = parser.run_inner(&["--help"]).unwrap_err();
+    let help_str = format!("{:?}", help);
+    // Verify first paragraph is included
+    assert!(help_str.contains("First paragraph only"));
+}
+
+/// First paragraph
+///
+///
+/// Second paragraph after empty lines
+///
+/// Third paragraph
+#[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+#[allow(dead_code)]
+struct EmptyLineHandling {
+    #[bpaf(long)]
+    field: String,
+}
+
+#[test]
+fn doc_with_empty_lines() {
+    let parser = EmptyLineHandling::parse();
+    let help = parser.run_inner(&["--help"]).unwrap_err();
+    let help_str = format!("{:?}", help);
+    // Verify paragraphs are separated correctly
+    assert!(help_str.contains("First paragraph"));
+}

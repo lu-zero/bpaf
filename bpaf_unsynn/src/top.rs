@@ -1172,7 +1172,11 @@ impl Top {
                              In enums with command variants, non-command variants must be unit variants.",
                             variant_name
                         );
-                        return quote! { compile_error!(#error_msg) };
+                        // Use quote_spanned! to attach span from variant name to the error
+                        let span = variant.name.span();
+                        return quote::quote_spanned! {span=>
+                            compile_error!(#error_msg)
+                        };
                     }
 
                     if variant.fields.is_empty() {

@@ -269,3 +269,21 @@ fn unit_with_pure_attribute() {
     assert_eq!(r.unit_field, ());
     assert_eq!(r.name, "test");
 }
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct UnitWithNaming {
+    #[bpaf(short, long)]
+    marker: (),
+    name: String,
+}
+
+#[test]
+fn unit_with_short_long() {
+    let parser = UnitWithNaming::parse();
+
+    // Unit type with naming attributes is always pure (no arguments consumed)
+    let r = parser.run_inner(&["--name", "test"]).unwrap();
+    assert_eq!(r.marker, ());
+    assert_eq!(r.name, "test");
+}

@@ -220,6 +220,34 @@ fn any_with_check() {
     assert_eq!(r.file, "file.txt");
 }
 
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+struct NamedAnyConsumer {
+    #[bpaf(short, long, any("INPUT", check_input))]
+    value: String,
+}
+
+fn check_input(s: String) -> Option<String> {
+    if !s.is_empty() {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+#[test]
+fn named_any_consumer() {
+    let parser = NamedAnyConsumer::parse();
+
+    // Test with short flag
+    let r = parser.run_inner(&["-v", "test"]).unwrap();
+    assert_eq!(r.value, "test");
+
+    // Test with long flag
+    let r = parser.run_inner(&["--value", "data"]).unwrap();
+    assert_eq!(r.value, "data");
+}
+
 // =============================================================================
 // External consumer
 // =============================================================================

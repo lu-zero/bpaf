@@ -946,3 +946,30 @@ fn tuple_variant_with_doc_on_field() {
     assert_eq!(r, TupleWithDocs::Echo("hello".to_string()));
 }
 
+// =============================================================================
+// Tuple variant enum (non-command, flag-based)
+// =============================================================================
+
+#[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
+#[bpaf(options)]
+enum TupleVariantEnum {
+    #[bpaf(long)]
+    First(String),
+
+    #[bpaf(long)]
+    Second(String, i32),
+}
+
+#[test]
+fn tuple_variant_enum_with_fields() {
+    let parser = TupleVariantEnum::parse();
+
+    // Test single field tuple variant - fields are positional by default
+    let r = parser.run_inner(&["test"]).unwrap();
+    assert_eq!(r, TupleVariantEnum::First("test".to_string()));
+
+    // Test multi-field tuple variant - both fields are positional
+    let r = parser.run_inner(&["data", "42"]).unwrap();
+    assert_eq!(r, TupleVariantEnum::Second("data".to_string(), 42));
+}
+

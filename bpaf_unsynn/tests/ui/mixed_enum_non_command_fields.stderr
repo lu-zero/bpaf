@@ -1,0 +1,5 @@
+error: Variant 'Variant2' has fields but no #[bpaf(command)] attribute. In enums with command variants, non-command variants must be unit variants.
+  --> tests/ui/mixed_enum_non_command_fields.rs:11:5
+   |
+11 |     Variant2 {
+   |     ^^^^^^^^
