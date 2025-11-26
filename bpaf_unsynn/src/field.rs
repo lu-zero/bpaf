@@ -33,35 +33,35 @@ mod tests {
     fn test_option_type() {
         let shape = parse_type("Option<String>");
         assert!(shape.is_optional());
-        assert_eq!(shape.inner_type().to_string(), "String");
+        assert_eq!(shape.inner_type().unwrap().to_string(), "String");
     }
 
     #[test]
     fn test_vec_type() {
         let shape = parse_type("Vec<i32>");
         assert!(shape.is_multiple());
-        assert_eq!(shape.inner_type().to_string(), "i32");
+        assert_eq!(shape.inner_type().unwrap().to_string(), "i32");
     }
 
     #[test]
     fn test_direct_type() {
         let shape = parse_type("String");
         assert!(matches!(shape, TypeShape::Direct(_)));
-        assert_eq!(shape.inner_type().to_string(), "String");
+        assert_eq!(shape.inner_type().unwrap().to_string(), "String");
     }
 
     #[test]
     fn test_nested_option_vec() {
         let shape = parse_type("Option<Vec<String>>");
         assert!(shape.is_optional());
-        assert_eq!(shape.inner_type().to_string(), "Vec < String >");
+        assert_eq!(shape.inner_type().unwrap().to_string(), "Vec < String >");
     }
 
     #[test]
     fn test_nested_vec_option() {
         let shape = parse_type("Vec<Option<i32>>");
         assert!(shape.is_multiple());
-        assert_eq!(shape.inner_type().to_string(), "Option < i32 >");
+        assert_eq!(shape.inner_type().unwrap().to_string(), "Option < i32 >");
     }
 
     #[test]
@@ -69,7 +69,7 @@ mod tests {
         let shape = parse_type("Option<HashMap<String, Vec<u8>>>");
         assert!(shape.is_optional());
         assert_eq!(
-            shape.inner_type().to_string(),
+            shape.inner_type().unwrap().to_string(),
             "HashMap < String , Vec < u8 > >"
         );
     }

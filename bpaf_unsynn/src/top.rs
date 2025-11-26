@@ -426,6 +426,14 @@ pub struct StructField {
     pub attrs: FieldAttrs,
 }
 
+impl StructField {
+    /// Get the appropriate type for the parser based on field shape
+    /// Returns a reference to the inner type for Vec/Option, otherwise the field type
+    fn get_parser_type(&self) -> &TokenStream {
+        self.shape.inner_type().unwrap_or(&self.ty)
+    }
+}
+
 /// Represents the top-level item being derived
 pub struct Top {
     /// Name of the struct or enum
@@ -486,6 +494,22 @@ pub struct EnumBranch {
     pub short_alias: Option<char>,
     /// Explicit help text from #[bpaf(help("..."))]
     pub help: Option<String>,
+}
+
+/// Target for field construction - used by emit_fields_construct
+enum ConstructTarget<'a> {
+    /// Construct a struct: StructName { field1, field2 }
+    Struct,
+    /// Construct a tuple enum variant: EnumName::Variant(field1, field2)
+    EnumTupleVariant {
+        enum_name: &'a Ident,
+        variant_name: &'a Ident,
+    },
+    /// Construct a struct enum variant: EnumName::Variant { field1, field2 }
+    EnumStructVariant {
+        enum_name: &'a Ident,
+        variant_name: &'a Ident,
+    },
 }
 
 /// Parse struct-level attributes from #[bpaf(...)]
@@ -1074,23 +1098,8 @@ impl Top {
             };
         }
 
-        // Generate parsers for each field
-        let field_parsers: Vec<TokenStream> =
-            fields.iter().map(|field| self.emit_field(field)).collect();
-
-        // Generate field names for construction
-        let field_names: Vec<&Ident> = fields.iter().map(|f| &f.name).collect();
-        let field_names_construct = field_names.clone();
-
-        let name = &self.name;
-
-        // Generate: let field1 = parser1; let field2 = parser2; ... construct!(Name { field1, field2 })
-        let construct = quote! {
-            {
-                #( let #field_names = #field_parsers; )*
-                #bpaf::construct!(#name { #( #field_names_construct ),* })
-            }
-        };
+        // Generate field parsers and construction code
+        let construct = self.emit_fields_construct(fields, ConstructTarget::Struct);
 
         // Apply .adjacent() if the struct has the adjacent flag
         if self.adjacent {
@@ -1135,32 +1144,13 @@ impl Top {
                         apply_command_modifiers(base, help_text, variant, &command_name)
                     } else {
                         // Variant with fields - construct from fields
-                        let field_parsers: Vec<TokenStream> = variant.fields
-                            .iter()
-                            .map(|field| self.emit_field(field))
-                            .collect();
-
-                        let field_names: Vec<&Ident> = variant.fields.iter().map(|f| &f.name).collect();
-                        let field_names_construct = field_names.clone();
-
-                        let construct = if variant.is_tuple {
-                            // Tuple variant: Variant(field_0, field_1, ...)
-                            quote! {
-                                #bpaf::construct!(#enum_name::#variant_name( #( #field_names_construct ),* ))
-                            }
+                        let construct_target = if variant.is_tuple {
+                            ConstructTarget::EnumTupleVariant { enum_name, variant_name }
                         } else {
-                            // Struct variant: Variant { field1, field2, ... }
-                            quote! {
-                                #bpaf::construct!(#enum_name::#variant_name { #( #field_names_construct ),* })
-                            }
+                            ConstructTarget::EnumStructVariant { enum_name, variant_name }
                         };
-
-                        let base = quote! {
-                            {
-                                #( let #field_names = #field_parsers; )*
-                                #construct
-                            }.to_options()
-                        };
+                        let construct = self.emit_fields_construct(&variant.fields, construct_target);
+                        let base = quote! { #construct.to_options() };
                         apply_command_modifiers(base, help_text, variant, &command_name)
                     }
                 } else {
@@ -1193,32 +1183,12 @@ impl Top {
                         }
                     } else {
                         // Pure flag-based enum with variant fields - construct from fields
-                        let field_parsers: Vec<TokenStream> = variant.fields
-                            .iter()
-                            .map(|field| self.emit_field(field))
-                            .collect();
-
-                        let field_names: Vec<&Ident> = variant.fields.iter().map(|f| &f.name).collect();
-                        let field_names_construct = field_names.clone();
-
-                        let construct = if variant.is_tuple {
-                            // Tuple variant: Variant(field_0, field_1, ...)
-                            quote! {
-                                #bpaf::construct!(#enum_name::#variant_name( #( #field_names_construct ),* ))
-                            }
+                        let construct_target = if variant.is_tuple {
+                            ConstructTarget::EnumTupleVariant { enum_name, variant_name }
                         } else {
-                            // Struct variant: Variant { field1, field2, ... }
-                            quote! {
-                                #bpaf::construct!(#enum_name::#variant_name { #( #field_names_construct ),* })
-                            }
+                            ConstructTarget::EnumStructVariant { enum_name, variant_name }
                         };
-
-                        quote! {
-                            {
-                                #( let #field_names = #field_parsers; )*
-                                #construct
-                            }
-                        }
+                        self.emit_fields_construct(&variant.fields, construct_target)
                     }
                 }
             })
@@ -1310,11 +1280,7 @@ impl Top {
         let mut parser = match consumer {
             // Handle standalone Positional first (when base_parser is None)
             Some(ConsumerType::Positional { metavar }) if base_parser.is_none() => {
-                let ty = if field.shape.is_multiple() || field.shape.is_optional() {
-                    field.shape.inner_type()
-                } else {
-                    field.ty.clone()
-                };
+                let ty = field.get_parser_type();
                 let metavar_str = metavar.as_deref().unwrap_or(DEFAULT_POSITIONAL_METAVAR);
                 quote! { #bpaf::positional::<#ty>(#metavar_str) }
             }
@@ -1350,12 +1316,7 @@ impl Top {
                         quote! { #base_parser.switch() }
                     }
                     Some(ConsumerType::Argument { metavar }) => {
-                        // Use inner type for Vec/Option shapes, otherwise use field type
-                        let ty = if field.shape.is_multiple() || field.shape.is_optional() {
-                            field.shape.inner_type()
-                        } else {
-                            field.ty.clone()
-                        };
+                        let ty = field.get_parser_type();
                         let metavar_str = metavar.as_deref().unwrap_or(&field_name_str);
                         quote! { #base_parser.argument::<#ty>(#metavar_str) }
                     }
@@ -1476,6 +1437,44 @@ impl Top {
         }
 
         parser
+    }
+
+    /// Generate field parsers and construction code for a set of fields
+    /// Used by structs and enum variants to build parsers from fields
+    fn emit_fields_construct(
+        &self,
+        fields: &[StructField],
+        construct_target: ConstructTarget,
+    ) -> TokenStream {
+        let bpaf = self.bpaf_crate();
+
+        // Generate parsers for each field
+        let field_parsers: Vec<TokenStream> =
+            fields.iter().map(|field| self.emit_field(field)).collect();
+
+        // Extract field names
+        let field_names: Vec<&Ident> = fields.iter().map(|f| &f.name).collect();
+
+        // Generate construct based on target type
+        let construct = match construct_target {
+            ConstructTarget::Struct => {
+                let struct_name = &self.name;
+                quote! { #bpaf::construct!(#struct_name { #( #field_names ),* }) }
+            }
+            ConstructTarget::EnumTupleVariant { enum_name, variant_name } => {
+                quote! { #bpaf::construct!(#enum_name::#variant_name( #( #field_names ),* )) }
+            }
+            ConstructTarget::EnumStructVariant { enum_name, variant_name } => {
+                quote! { #bpaf::construct!(#enum_name::#variant_name { #( #field_names ),* }) }
+            }
+        };
+
+        quote! {
+            {
+                #( let #field_names = #field_parsers; )*
+                #construct
+            }
+        }
     }
 
     /// Apply a post-processing attribute to the parser

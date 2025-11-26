@@ -262,12 +262,13 @@ impl Parser for TypeShape {
 }
 
 impl TypeShape {
-    /// Get the inner type for Optional/Multiple/Direct, or empty for Bool/Unit
-    pub fn inner_type(&self) -> TokenStream {
+    /// Get the inner type for Optional/Multiple/Direct
+    /// Returns None for Bool/Unit types
+    pub fn inner_type(&self) -> Option<&TokenStream> {
         match self {
-            TypeShape::Bool | TypeShape::Unit => TokenStream::new(),
+            TypeShape::Bool | TypeShape::Unit => None,
             TypeShape::Optional(inner) | TypeShape::Multiple(inner) | TypeShape::Direct(inner) => {
-                inner.clone()
+                Some(inner)
             }
         }
     }
