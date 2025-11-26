@@ -13,7 +13,7 @@ mod tests {
 
     fn parse_type(s: &str) -> TypeShape {
         let ty: TokenStream = s.parse().unwrap();
-        let mut iter = ToTokens::to_token_iter(&ty);
+        let mut iter = ty.to_token_iter();
         iter.parse::<TypeShape>().unwrap()
     }
 

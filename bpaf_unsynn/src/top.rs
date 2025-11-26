@@ -91,7 +91,7 @@ fn collect_attributes(iter: &mut TokenIter) -> (Vec<BpafAttr>, Vec<DocInner>) {
 fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
     let mut fields = Vec::new();
     let stream = group.stream();
-    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+    let mut iter = stream.to_token_iter();
 
     loop {
         // Try to parse a field: name : type,
@@ -110,14 +110,16 @@ fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
 
             // Collect type tokens until comma or end using VerbatimUntilComma
             let ty_verbatim: VerbatimUntilComma = t.parse()?;
-            let ty_tokens = unsynn::ToTokens::to_token_stream(&ty_verbatim);
 
             // Consume optional trailing comma
             let _ = t.parse::<Comma>();
 
             // Parse type shape directly from tokens
-            let mut ty_iter = unsynn::ToTokens::to_token_iter(&ty_tokens);
+            let mut ty_iter = ty_verbatim.to_token_iter();
             let shape: TypeShape = ty_iter.parse()?;
+
+            // Convert to TokenStream for storage
+            let ty_tokens = ty_verbatim.to_token_stream();
 
             // Return the parsed field structure and attributes for validation
             Ok((name, ty_tokens, shape, bpaf_attrs, doc_comments))
@@ -156,7 +158,13 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
         .enumerate()
         .map(|(field_index, delimited)| {
             let field = delimited.value;
-            let ty_tokens = unsynn::ToTokens::to_token_stream(&field.ty);
+
+            // Parse type shape directly from the verbatim tokens
+            let mut ty_iter = field.ty.to_token_iter();
+            let shape: TypeShape = ty_iter.parse()?;
+
+            // Convert to TokenStream for storage
+            let ty_tokens = field.ty.to_token_stream();
 
             // Defensive check: unsynn's DelimitedVec should never create empty elements
             // from trailing commas, so ty_tokens should never be empty with valid Rust syntax
@@ -170,10 +178,6 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
             if ty_tokens.is_empty() {
                 return Ok(None);
             }
-
-            // Parse type shape
-            let mut ty_iter = unsynn::ToTokens::to_token_iter(&ty_tokens);
-            let shape: TypeShape = ty_iter.parse()?;
 
             // Extract bpaf attrs and doc comments
             let (bpaf_attrs, doc_comments) = field.extract_attrs();
@@ -210,7 +214,7 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
 fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
     let mut variants = Vec::new();
     let stream = group.stream();
-    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+    let mut iter = stream.to_token_iter();
 
     loop {
         // Try to parse a variant

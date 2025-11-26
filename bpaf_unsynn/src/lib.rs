@@ -31,7 +31,7 @@ fn unsynn_error_to_compile_error(e: unsynn::Error) -> proc_macro2::TokenStream {
 #[proc_macro_derive(Bpaf, attributes(bpaf))]
 pub fn derive_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input2: proc_macro2::TokenStream = input.into();
-    let mut iter = unsynn::ToTokens::to_token_iter(&input2);
+    let mut iter = input2.to_token_iter();
 
     match iter.parse::<Top>() {
         Ok(top) => top.into_token_stream().into(),

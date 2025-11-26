@@ -137,7 +137,7 @@ pub fn parse_two_args(
     use unsynn::IParse;
 
     let stream = group.stream();
-    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+    let mut iter = stream.to_token_iter();
     // Get first token for span information
     let first_token = iter.clone().next();
 
@@ -160,7 +160,7 @@ fn parse_any_args(group: &proc_macro2::Group) -> unsynn::Result<(String, TokenSt
     use unsynn::IParse;
 
     let stream = group.stream();
-    let mut iter = unsynn::ToTokens::to_token_iter(&stream);
+    let mut iter = stream.to_token_iter();
     // Get first token for span information
     let first_token = iter.clone().next();
 
@@ -193,7 +193,7 @@ fn struct_level_attr_error<T: unsynn::ToTokens>(
 
 /// Helper to create an error for naming attributes combined with positional
 fn positional_naming_error<T: unsynn::ToTokens>(kw: &T) -> unsynn::Result<FieldAttrs> {
-    let mut iter = unsynn::ToTokens::to_token_iter(kw);
+    let mut iter = kw.to_token_iter();
     unsynn::Error::other(
         iter.next(),
         &iter,
@@ -287,11 +287,7 @@ impl FieldAttrs {
                         });
                     }
                     BpafInner::Any(ai) => {
-                        let ty = ai.turbofish.as_ref().map(|t| {
-                            let mut ts = proc_macro2::TokenStream::new();
-                            unsynn::ToTokens::to_tokens(&t.ty, &mut ts);
-                            ts
-                        });
+                        let ty = ai.turbofish.as_ref().map(|t| t.ty.to_token_stream());
 
                         // Parse and validate any() arguments
                         let (metavar, check) = parse_any_args(&ai.args.0)?;
@@ -486,7 +482,7 @@ mod tests {
 
     fn parse_bpaf_attr(content: &str) -> BpafAttr {
         let tokens: TokenStream = format!("bpaf({})", content).parse().unwrap();
-        let mut iter = unsynn::ToTokens::to_token_iter(&tokens);
+        let mut iter = tokens.to_token_iter();
         iter.parse::<BpafAttr>().unwrap()
     }
 
