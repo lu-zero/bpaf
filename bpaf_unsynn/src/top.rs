@@ -4,7 +4,8 @@ use crate::attrs::{ConsumerType, FieldAttrs, Post, PostDecor, PostParse};
 use crate::mode::Mode;
 use crate::parsing::*;
 use crate::utils::to_kebab_case;
-use quote::{quote, ToTokens};
+use quote::quote;
+use unsynn::ToTokens;
 
 // Constants for magic strings
 const DEFAULT_POSITIONAL_METAVAR: &str = "ARG";
@@ -887,30 +888,29 @@ impl Parser for Top {
         > = input.parse()?;
 
         // Parse the body: either a brace group with fields/variants, or semicolon for unit struct
-        let body =
-            match input.parse::<unsynn::Either<unsynn::BraceGroup, unsynn::Semicolon>>()? {
-                unsynn::Either::First(body_group) => {
-                    if is_enum {
-                        let variants = parse_enum_variants(&body_group.0)?;
-                        if variants.is_empty() {
-                            return unsynn::Error::other(
-                                Some(TokenTree::Group(body_group.0)),
-                                &input,
-                                "Enums must have at least one variant".to_string(),
-                            );
-                        }
-                        Body::Enum(variants)
-                    } else {
-                        Body::Struct(parse_fields(&body_group.0)?)
+        let body = match input.parse::<unsynn::Either<unsynn::BraceGroup, unsynn::Semicolon>>()? {
+            unsynn::Either::First(body_group) => {
+                if is_enum {
+                    let variants = parse_enum_variants(&body_group.0)?;
+                    if variants.is_empty() {
+                        return unsynn::Error::other(
+                            Some(TokenTree::Group(body_group.0)),
+                            &input,
+                            "Enums must have at least one variant".to_string(),
+                        );
                     }
+                    Body::Enum(variants)
+                } else {
+                    Body::Struct(parse_fields(&body_group.0)?)
                 }
-                unsynn::Either::Second(_semicolon) => {
-                    // Unit struct is fine; unit enum (enum Foo;) is invalid Rust
-                    // syntax so the compiler will reject it anyway
-                    Body::Struct(Vec::new())
-                }
-                _ => unreachable!(),
-            };
+            }
+            unsynn::Either::Second(_semicolon) => {
+                // Unit struct is fine; unit enum (enum Foo;) is invalid Rust
+                // syntax so the compiler will reject it anyway
+                Body::Struct(Vec::new())
+            }
+            _ => unreachable!(),
+        };
 
         Ok(Top {
             name,
@@ -1463,10 +1463,16 @@ impl Top {
                 let struct_name = &self.name;
                 quote! { #bpaf::construct!(#struct_name { #( #field_names ),* }) }
             }
-            ConstructTarget::EnumTupleVariant { enum_name, variant_name } => {
+            ConstructTarget::EnumTupleVariant {
+                enum_name,
+                variant_name,
+            } => {
                 quote! { #bpaf::construct!(#enum_name::#variant_name( #( #field_names ),* )) }
             }
-            ConstructTarget::EnumStructVariant { enum_name, variant_name } => {
+            ConstructTarget::EnumStructVariant {
+                enum_name,
+                variant_name,
+            } => {
                 quote! { #bpaf::construct!(#enum_name::#variant_name { #( #field_names ),* }) }
             }
         };

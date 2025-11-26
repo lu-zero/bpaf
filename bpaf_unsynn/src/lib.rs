@@ -12,7 +12,7 @@ mod top;
 mod utils;
 
 use top::Top;
-use unsynn::IParse;
+use unsynn::{IParse, ToTokens};
 
 /// Convert unsynn::Error to a compile_error! TokenStream with proper span
 fn unsynn_error_to_compile_error(e: unsynn::Error) -> proc_macro2::TokenStream {
@@ -34,7 +34,7 @@ pub fn derive_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut iter = unsynn::ToTokens::to_token_iter(&input2);
 
     match iter.parse::<Top>() {
-        Ok(top) => quote::quote! { #top }.into(),
+        Ok(top) => top.into_token_stream().into(),
         Err(e) => unsynn_error_to_compile_error(e).into(),
     }
 }
