@@ -14,6 +14,17 @@ mod utils;
 use top::Top;
 use unsynn::IParse;
 
+/// Convert unsynn::Error to a compile_error! TokenStream with proper span
+fn unsynn_error_to_compile_error(e: unsynn::Error) -> proc_macro2::TokenStream {
+    let err = e.to_string();
+    if let Some(token) = e.failed_at() {
+        let span = token.span();
+        quote::quote_spanned! { span => compile_error!(#err); }
+    } else {
+        quote::quote! { compile_error!(#err); }
+    }
+}
+
 /// Derive macro for bpaf command line parser
 ///
 /// For documentation refer to bpaf library: <https://docs.rs/bpaf/latest/bpaf/>
@@ -24,21 +35,6 @@ pub fn derive_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     match iter.parse::<Top>() {
         Ok(top) => quote::quote! { #top }.into(),
-        Err(e) => {
-            let err = e.to_string();
-            // Try to get the span from the failed token for better error location
-            if let Some(token) = e.failed_at() {
-                let span = token.span();
-                quote::quote_spanned! { span =>
-                    compile_error!(#err);
-                }
-                .into()
-            } else {
-                quote::quote! {
-                    compile_error!(#err);
-                }
-                .into()
-            }
-        }
+        Err(e) => unsynn_error_to_compile_error(e).into(),
     }
 }

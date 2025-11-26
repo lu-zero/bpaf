@@ -191,6 +191,16 @@ fn struct_level_attr_error<T: unsynn::ToTokens>(
     )
 }
 
+/// Helper to create an error for naming attributes combined with positional
+fn positional_naming_error<T: unsynn::ToTokens>(kw: &T) -> unsynn::Result<FieldAttrs> {
+    let mut iter = unsynn::ToTokens::to_token_iter(kw);
+    unsynn::Error::other(
+        iter.next(),
+        &iter,
+        "positional field doesn't take a name annotation (short/long)".to_string(),
+    )
+}
+
 impl FieldAttrs {
     /// Parse attributes from a field's attribute list
     /// Uses unsynn grammar to parse BpafAttr and DocInner structures directly
@@ -225,12 +235,7 @@ impl FieldAttrs {
                     BpafInner::Short(si) => {
                         // Validate: short doesn't work with positional
                         if matches!(field_attrs.consumer, Some(ConsumerType::Positional { .. })) {
-                            let mut iter = unsynn::ToTokens::to_token_iter(&si._kw);
-                            return unsynn::Error::other(
-                                iter.next(),
-                                &iter,
-                                "positional field doesn't take a name annotation (short/long)".to_string(),
-                            );
+                            return positional_naming_error(&si._kw);
                         }
                         field_attrs.short = Some(
                             si.ch
@@ -242,12 +247,7 @@ impl FieldAttrs {
                     BpafInner::Long(li) => {
                         // Validate: long doesn't work with positional
                         if matches!(field_attrs.consumer, Some(ConsumerType::Positional { .. })) {
-                            let mut iter = unsynn::ToTokens::to_token_iter(&li._kw);
-                            return unsynn::Error::other(
-                                iter.next(),
-                                &iter,
-                                "positional field doesn't take a name annotation (short/long)".to_string(),
-                            );
+                            return positional_naming_error(&li._kw);
                         }
                         field_attrs.long = Some(
                             li.name
@@ -276,12 +276,7 @@ impl FieldAttrs {
                     BpafInner::Positional(pi) => {
                         // Validate: positional doesn't take a name annotation
                         if field_attrs.short.is_some() || field_attrs.long.is_some() {
-                            let mut iter = unsynn::ToTokens::to_token_iter(&pi._kw);
-                            return unsynn::Error::other(
-                                iter.next(),
-                                &iter,
-                                "positional field doesn't take a name annotation (short/long)".to_string(),
-                            );
+                            return positional_naming_error(&pi._kw);
                         }
                         let metavar = pi.metavar.as_ref().map(|g| g.content.as_str().to_string());
                         field_attrs.consumer = Some(ConsumerType::Positional { metavar });

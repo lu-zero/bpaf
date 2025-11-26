@@ -10,6 +10,12 @@ use quote::{quote, ToTokens};
 const DEFAULT_POSITIONAL_METAVAR: &str = "ARG";
 const TUPLE_FIELD_NAME_PREFIX: &str = "field_";
 
+/// Create a compile_error! with span pointing to a specific identifier
+fn spanned_compile_error(ident: &Ident, msg: String) -> TokenStream {
+    let span = ident.span();
+    quote::quote_spanned! {span=> compile_error!(#msg) }
+}
+
 /// Apply command variant modifiers in the correct order
 /// This includes: help, fallback_to_usage, command, long, short, and hide
 fn apply_command_modifiers(
@@ -1162,11 +1168,7 @@ impl Top {
                              In enums with command variants, non-command variants must be unit variants.",
                             variant_name
                         );
-                        // Use quote_spanned! to attach span from variant name to the error
-                        let span = variant.name.span();
-                        return quote::quote_spanned! {span=>
-                            compile_error!(#error_msg)
-                        };
+                        return spanned_compile_error(&variant.name, error_msg);
                     }
 
                     if variant.fields.is_empty() {
