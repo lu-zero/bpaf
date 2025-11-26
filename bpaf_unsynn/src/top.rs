@@ -1041,8 +1041,8 @@ impl ToTokens for Top {
 impl Top {
     /// Get the bpaf crate path to use (either custom or default ::bpaf)
     fn bpaf_crate(&self) -> TokenStream {
-        if let Some(ref custom_path) = self.bpaf_path {
-            custom_path.clone()
+        if let Some(custom_path) = &self.bpaf_path {
+            quote! { #custom_path }
         } else {
             quote! { ::bpaf }
         }

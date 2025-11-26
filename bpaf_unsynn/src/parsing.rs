@@ -801,11 +801,7 @@ impl AnyArgs {
     /// Get the check function as TokenStream
     pub fn check_fn_tokens(&self) -> proc_macro2::TokenStream {
         use unsynn::ToTokens;
-        let mut ts = proc_macro2::TokenStream::new();
-        for delimited in self.check_fn.iter() {
-            delimited.value.to_tokens(&mut ts);
-        }
-        ts
+        self.check_fn.to_token_stream()
     }
 }
 
