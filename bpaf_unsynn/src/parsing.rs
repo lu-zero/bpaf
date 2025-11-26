@@ -253,11 +253,11 @@ impl Parser for TypeShape {
         }
 
         // Collect remaining as Direct type
-        let tokens: Vec<TokenTree> = input.collect();
+        let tokens: TokenStream = input.collect();
         if tokens.is_empty() {
             return Err(Error::no_error());
         }
-        Ok(TypeShape::Direct(tokens.into_iter().collect()))
+        Ok(TypeShape::Direct(tokens))
     }
 }
 
