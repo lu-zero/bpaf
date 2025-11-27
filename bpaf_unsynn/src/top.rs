@@ -2,10 +2,17 @@
 
 use crate::attrs::{ConsumerType, FieldAttrs, Post, PostDecor, PostParse};
 use crate::mode::Mode;
-use crate::parsing::*;
+use crate::parsing::{
+    Attribute, BpafAttr, BpafInner, DocInner, KEnum, KStruct, TokenIter, TupleFields, TypeShape,
+    VerbatimUntilComma, Visibility,
+};
 use crate::utils::to_kebab_case;
+use proc_macro2::{Ident, TokenStream, TokenTree};
 use quote::quote;
-use unsynn::ToTokens;
+use unsynn::{
+    BraceGroup, BracketGroupContaining, Colon, Comma, Cons, IParse, Many, Parser, Pound, Result,
+    ToTokens, Transaction,
+};
 
 // Constants for magic strings
 const DEFAULT_POSITIONAL_METAVAR: &str = "ARG";
@@ -66,8 +73,6 @@ type OuterAttr = Cons<Pound, BracketGroupContaining<Attribute>>;
 /// Collect bpaf attributes and doc comments from a token stream
 /// Uses unsynn grammar to parse attributes directly
 fn collect_attributes(iter: &mut TokenIter) -> (Vec<BpafAttr>, Vec<DocInner>) {
-    use crate::parsing::*;
-
     // Parse all attributes at once
     let attrs: Option<Many<OuterAttr>> = iter.parse().ok();
 
@@ -100,7 +105,7 @@ fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
             let (bpaf_attrs, doc_comments) = collect_attributes(t);
 
             // Skip visibility if present
-            let _ = t.parse::<crate::parsing::Visibility>();
+            let _ = t.parse::<Visibility>();
 
             // Get field name
             let name: Ident = t.parse()?;
@@ -291,8 +296,6 @@ struct Ed {
 /// Parse variant-level attributes from #[bpaf(...)]
 /// Accepts parsed BpafAttr structures from the unsynn grammar
 fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
-    use crate::parsing::*;
-
     let mut result = Ed::default();
 
     for bpaf_attr in attrs {
@@ -569,10 +572,8 @@ where
 }
 
 fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
-    use crate::attrs::{Post, PostDecor};
     use crate::help::Help;
     use crate::mode::{CommandCfg, OptionsCfg, ParserCfg};
-    use crate::parsing::*;
 
     // Mode configuration tracking (following bpaf_derive pattern)
     let mut command: Option<CommandCfg> = None;
@@ -764,8 +765,6 @@ fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
 
 impl Parser for Top {
     fn parser(input: &mut TokenIter) -> Result<Self> {
-        use crate::parsing::*;
-
         // Collect struct-level attributes using unsynn grammar
         let mut bpaf_attrs = Vec::new();
         let mut doc_comments = Vec::new();
@@ -863,10 +862,9 @@ impl Parser for Top {
         }
 
         // Try to skip visibility modifier if present
-        let _ = input.parse::<crate::parsing::Visibility>();
+        let _ = input.parse::<Visibility>();
 
         // Expect "struct" or "enum" keyword
-        use crate::parsing::{KEnum, KStruct};
         let first_token = input.clone().next();
         let is_enum = match input.parse::<unsynn::Either<KStruct, KEnum>>() {
             Ok(unsynn::Either::First(_)) => false,

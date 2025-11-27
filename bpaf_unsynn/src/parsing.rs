@@ -800,7 +800,6 @@ impl AnyArgs {
 
     /// Get the check function as TokenStream
     pub fn check_fn_tokens(&self) -> proc_macro2::TokenStream {
-        use unsynn::ToTokens;
         self.check_fn.to_token_stream()
     }
 }

@@ -1,7 +1,9 @@
 //! Attribute parsing for #[bpaf(...)] annotations
 
-use crate::parsing::*;
+use crate::parsing::{AnyArgs, BpafAttr, BpafInner, DocInner, TwoArgs};
 use crate::utils::to_kebab_case;
+use proc_macro2::TokenStream;
+use unsynn::{IParse, Result, ToTokens};
 
 /// Attributes that can be applied to a field
 #[derive(Debug, Clone, Default)]
@@ -134,14 +136,12 @@ pub fn parse_two_args(
     attr_name: &str,
     arg_description: &str,
 ) -> unsynn::Result<(TokenStream, TokenStream)> {
-    use unsynn::IParse;
-
     let stream = group.stream();
     let mut iter = stream.to_token_iter();
     // Get first token for span information
     let first_token = iter.clone().next();
 
-    match iter.parse::<crate::parsing::TwoArgs>() {
+    match iter.parse::<TwoArgs>() {
         Ok(two_args) => Ok(two_args.into_streams()),
         Err(_) => unsynn::Error::other(
             first_token,
@@ -157,14 +157,12 @@ pub fn parse_two_args(
 /// Helper function to parse any() arguments: string literal and check function
 /// Returns an error if metavar is not a string literal or arguments are malformed
 fn parse_any_args(group: &proc_macro2::Group) -> unsynn::Result<(String, TokenStream)> {
-    use unsynn::IParse;
-
     let stream = group.stream();
     let mut iter = stream.to_token_iter();
     // Get first token for span information
     let first_token = iter.clone().next();
 
-    match iter.parse::<crate::parsing::AnyArgs>() {
+    match iter.parse::<AnyArgs>() {
         Ok(any_args) => {
             let metavar = any_args.metavar_str().to_string();
             let check = any_args.check_fn_tokens();
@@ -210,8 +208,6 @@ impl FieldAttrs {
         bpaf_attrs: &[BpafAttr],
         doc_attrs: &[DocInner],
     ) -> Result<Self> {
-        use crate::parsing::*;
-
         let mut field_attrs = FieldAttrs::default();
 
         // Extract doc comment strings (already parsed)
@@ -478,7 +474,6 @@ impl FieldAttrs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parsing::BpafAttr;
 
     fn parse_bpaf_attr(content: &str) -> BpafAttr {
         let tokens: TokenStream = format!("bpaf({})", content).parse().unwrap();
