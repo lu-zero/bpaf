@@ -393,25 +393,23 @@ fn parse_doc_paragraphs(
 /// - Second paragraph -> header
 /// - Third and subsequent paragraphs -> footer
 fn split_options_help(doc_attrs: &[DocInner], opts: &mut crate::mode::OptionsCfg) {
-    use crate::help::Help;
-
     let (first, second, rest) = parse_doc_paragraphs(doc_attrs);
 
     if let Some(descr) = first {
         if opts.descr.is_none() {
-            opts.descr = Some(Help::Doc(descr));
+            opts.descr = Some(quote! { #descr });
         }
     }
 
     if let Some(header) = second {
         if opts.header.is_none() {
-            opts.header = Some(Help::Doc(header));
+            opts.header = Some(quote! { #header });
         }
     }
 
     if let Some(footer) = rest {
         if opts.footer.is_none() {
-            opts.footer = Some(Help::Doc(footer));
+            opts.footer = Some(quote! { #footer });
         }
     }
 }
@@ -572,7 +570,6 @@ where
 }
 
 fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
-    use crate::help::Help;
     use crate::mode::{CommandCfg, OptionsCfg, ParserCfg};
 
     // Mode configuration tracking (following bpaf_derive pattern)
@@ -638,17 +635,17 @@ fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
             // Options mode attributes
             BpafInner::Descr(d) => {
                 with_options(&mut options, |opts| {
-                    opts.descr = Some(Help::Custom(d.expr.0.stream()));
+                    opts.descr = Some(d.expr.0.stream());
                 });
             }
             BpafInner::Footer(f) => {
                 with_options(&mut options, |opts| {
-                    opts.footer = Some(Help::Custom(f.expr.0.stream()));
+                    opts.footer = Some(f.expr.0.stream());
                 });
             }
             BpafInner::Header(h) => {
                 with_options(&mut options, |opts| {
-                    opts.header = Some(Help::Custom(h.expr.0.stream()));
+                    opts.header = Some(h.expr.0.stream());
                 });
             }
             BpafInner::Usage(u) => {
@@ -694,7 +691,7 @@ fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
                     // unsynn's LiteralString includes quotes, so strip them
                     let val = h.text.content.value();
                     let stripped = val.trim_matches('"');
-                    cmd.help = Some(Help::Doc(stripped.to_string()));
+                    cmd.help = Some(quote! { #stripped });
                 });
             }
 
@@ -722,7 +719,7 @@ fn parse_struct_attrs(bpaf_attr: &BpafAttr) -> Result<Option<TopInfo>> {
             }
             BpafInner::GroupHelp(gh) => {
                 with_parser(&mut parser, |p| {
-                    p.group_help = Some(Help::Custom(gh.text.0.stream()));
+                    p.group_help = Some(gh.text.0.stream());
                 });
             }
             BpafInner::Complete(c) => {
@@ -855,7 +852,7 @@ impl Parser for Top {
                             parts.push(r);
                         }
                         let doc_text = parts.join("\n");
-                        parser.group_help = Some(crate::help::Help::Doc(doc_text));
+                        parser.group_help = Some(quote! { #doc_text });
                     }
                 }
             }

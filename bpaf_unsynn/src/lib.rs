@@ -4,7 +4,6 @@
 //! For documentation refer to `bpaf` library docs: <https://docs.rs/bpaf/latest/bpaf/>
 
 mod attrs;
-mod help;
 mod mode;
 mod parsing;
 mod top;

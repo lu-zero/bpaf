@@ -3,13 +3,15 @@
 //! This module defines the mode-specific configuration structs that control
 //! how parsers are generated for different modes (Options, Command, Parser).
 
-use crate::help::Help;
 use proc_macro2::TokenStream;
+
+/// Help text stored as a token stream (either a string literal or custom expression)
+pub type Help = TokenStream;
 
 /// Configuration for Command mode
 ///
 /// Used when `#[bpaf(command, ...)]` is specified at the top level.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CommandCfg {
     /// Custom command name (if specified with `command("name")`)
     pub name: Option<String>,
@@ -19,17 +21,6 @@ pub struct CommandCfg {
     pub short: Vec<char>,
     /// Help text for the command (from `help(...)`)
     pub help: Option<Help>,
-}
-
-impl Default for CommandCfg {
-    fn default() -> Self {
-        Self {
-            name: None,
-            long: Vec::new(),
-            short: Vec::new(),
-            help: None,
-        }
-    }
 }
 
 /// Configuration for Options mode
