@@ -1,4 +1,4 @@
-error: Parser failed: expected (alloc::string::String, proc_macro2::TokenStream), because any() requires a string literal for metavar and a check function: any("METAVAR", check_fn), found Literal { kind: Str, symbol: "METAVAR", suffix: None, span: #0 bytes(170..179) } at LineColumn { line: 6, column: 15 }
+error: Parser failed: any() requires a string literal for metavar and a check function: any("METAVAR", check_fn)
  --> tests/ui/any_single_arg.rs:6:16
   |
 6 |     #[bpaf(any("METAVAR"))]

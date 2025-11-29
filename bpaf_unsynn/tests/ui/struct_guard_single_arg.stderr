@@ -1,4 +1,4 @@
-error: Parser failed: expected (proc_macro2::TokenStream, proc_macro2::TokenStream), because guard() requires exactly 2 comma-separated arguments (check_fn, error_message), found Ident { sym: check_valid, span: #0 bytes(220..231) } at LineColumn { line: 8, column: 13 }
+error: Parser failed: guard() requires exactly 2 comma-separated arguments (check_fn, error_message)
  --> tests/ui/struct_guard_single_arg.rs:8:14
   |
 8 | #[bpaf(guard(check_valid))]

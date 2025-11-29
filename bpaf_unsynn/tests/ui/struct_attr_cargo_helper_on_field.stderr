@@ -1,4 +1,4 @@
-error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because cargo_helper is a struct-level attribute, not a field attribute, found Ident { sym: cargo_helper, span: #0 bytes(159..171) } at LineColumn { line: 6, column: 11 }
+error: Parser failed: cargo_helper is a struct-level attribute, not a field attribute
  --> tests/ui/struct_attr_cargo_helper_on_field.rs:6:12
   |
 6 |     #[bpaf(cargo_helper("test"))]

@@ -1,4 +1,4 @@
-error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because positional field doesn't take a name annotation (short/long), found Ident { sym: positional, span: #0 bytes(177..187) } at LineColumn { line: 6, column: 18 }
+error: Parser failed: positional field doesn't take a name annotation (short/long)
  --> tests/ui/positional_with_short.rs:6:19
   |
 6 |     #[bpaf(short, positional("FILE"))]

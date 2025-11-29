@@ -1,4 +1,4 @@
-error: Unexpected token: expected bpaf_unsynn::attrs::FieldAttrs, found Ident { sym: foobar_unknown, span: #0 bytes(222..236) } at LineColumn { line: 7, column: 11 }
+error: Unexpected token: expecting bpaf_unsynn::attrs::FieldAttrs
  --> tests/ui/unknown_attribute.rs:7:12
   |
 7 |     #[bpaf(foobar_unknown)]

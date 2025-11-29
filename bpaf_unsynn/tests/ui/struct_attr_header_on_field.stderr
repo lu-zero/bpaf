@@ -1,4 +1,4 @@
-error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because header is a struct-level attribute, not a field attribute, found Ident { sym: header, span: #0 bytes(153..159) } at LineColumn { line: 6, column: 11 }
+error: Parser failed: header is a struct-level attribute, not a field attribute
  --> tests/ui/struct_attr_header_on_field.rs:6:12
   |
 6 |     #[bpaf(header("test"))]

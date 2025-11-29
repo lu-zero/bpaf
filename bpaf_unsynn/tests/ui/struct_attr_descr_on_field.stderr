@@ -1,4 +1,4 @@
-error: Parser failed: expected bpaf_unsynn::attrs::FieldAttrs, because descr is a struct-level attribute, not a field attribute, found Ident { sym: descr, span: #0 bytes(152..157) } at LineColumn { line: 6, column: 11 }
+error: Parser failed: descr is a struct-level attribute, not a field attribute
  --> tests/ui/struct_attr_descr_on_field.rs:6:12
   |
 6 |     #[bpaf(descr("test"))]

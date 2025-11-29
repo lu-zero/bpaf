@@ -10,11 +10,17 @@ mod top;
 mod utils;
 
 use top::Top;
-use unsynn::{IParse, ToTokens};
+use unsynn::{ErrorKind, IParse, ToTokens};
 
 /// Convert unsynn::Error to a compile_error! TokenStream with proper span
 fn unsynn_error_to_compile_error(e: unsynn::Error) -> proc_macro2::TokenStream {
-    let err = e.to_string();
+    let err = match e.kind {
+        ErrorKind::UnexpectedToken => {
+            format!("Unexpected token: expecting {}", e.expected_type_name())
+        }
+        ErrorKind::Other { ref reason } => format!("Parser failed: {reason}"),
+        _ => e.to_string(),
+    };
     if let Some(token) = e.failed_at() {
         let span = token.span();
         quote::quote_spanned! { span => compile_error!(#err); }
