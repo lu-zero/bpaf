@@ -739,7 +739,7 @@ unsynn! {
         /// A documentation attribute: #[doc = "..."]
         Doc(DocInner),
         /// Any other attribute (skipped)
-        Other(Vec<TokenTree>),
+        Other(TokenStream),
     }
 
     /// Visibility modifier for fields
