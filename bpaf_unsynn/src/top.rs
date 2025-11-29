@@ -223,6 +223,7 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
 fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
     let mut variants = Vec::new();
     let stream = group.stream();
+
     let mut iter = stream.to_token_iter();
 
     loop {
@@ -230,9 +231,6 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
         let variant_result = iter.transaction(|t| {
             // Collect bpaf attributes and doc comments
             let (bpaf_attrs, doc_comments) = collect_attributes(t);
-
-            // Parse variant attributes
-            let variant_attrs = parse_variant_attrs(&bpaf_attrs);
 
             // Extract doc comments
             let doc_comment_strings = extract_doc_comments(&doc_comments);
@@ -252,28 +250,32 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
                 (Vec::new(), false)
             };
 
-            Ok(EnumBranch {
-                name,
-                fields,
-                doc_comments: doc_comment_strings,
-                is_command: variant_attrs.is_command,
-                command_name: variant_attrs.command_name,
-                skip: variant_attrs.skip,
-                hide: variant_attrs.hide,
-                fallback_to_usage: variant_attrs.fallback_to_usage,
-                is_tuple,
-                long_aliases: variant_attrs.long_aliases,
-                short_aliases: variant_attrs.short_aliases,
-                help: variant_attrs.help,
-            })
+            Ok((name, fields, is_tuple, bpaf_attrs, doc_comment_strings))
         });
 
         match variant_result {
-            Ok(variant) => {
-                variants.push(variant);
-                // Try to consume comma
+            Ok((name, fields, is_tuple, bpaf_attrs, doc_comment_strings)) => {
+                // Parse and validate variant attributes AFTER the transaction succeeds
+                // This ensures validation errors are propagated, not swallowed
+                let variant_attrs = parse_variant_attrs(&bpaf_attrs)?;
+
+                variants.push(EnumBranch {
+                    name,
+                    fields,
+                    doc_comments: doc_comment_strings,
+                    is_command: variant_attrs.is_command,
+                    command_name: variant_attrs.command_name,
+                    skip: variant_attrs.skip,
+                    hide: variant_attrs.hide,
+                    fallback_to_usage: variant_attrs.fallback_to_usage,
+                    is_tuple,
+                    long_aliases: variant_attrs.long_aliases,
+                    short_aliases: variant_attrs.short_aliases,
+                    help: variant_attrs.help,
+                });
                 let _ = iter.parse::<Comma>();
             }
+
             Err(_) => {
                 // No more variants
                 break;
@@ -299,7 +301,7 @@ struct Ed {
 
 /// Parse variant-level attributes from #[bpaf(...)]
 /// Accepts parsed BpafAttr structures from the unsynn grammar
-fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
+fn parse_variant_attrs(attrs: &[BpafAttr]) -> unsynn::Result<Ed> {
     let mut result = Ed::default();
 
     for bpaf_attr in attrs {
@@ -307,6 +309,15 @@ fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
         for delimited in bpaf_attr.inner.content.iter() {
             match &delimited.value {
                 BpafInner::Command(cmd) => {
+                    // Check if we've already seen a command attribute
+                    if result.is_command {
+                        let mut iter = bpaf_attr.to_token_iter();
+                        return unsynn::Error::other(
+                            iter.next(),
+                            &iter,
+                            "Multiple 'command' attributes are not allowed. Use 'short' and 'long' for command aliases.".to_string(),
+                        );
+                    }
                     result.is_command = true;
                     result.command_name = cmd.name.as_ref().map(|g| g.content.as_str().to_string());
                 }
@@ -339,7 +350,7 @@ fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
         }
     }
 
-    result
+    Ok(result)
 }
 
 /// Parse doc comments into paragraphs directly from DocInner structures
