@@ -207,10 +207,10 @@ unsynn! {
         pub inner: VerbatimUntilGt,
         pub _gt: Gt,
     }
-
-    /// Empty parentheses ()
-    pub struct UnitType(pub ParenthesisGroup);
 }
+
+/// Empty parentheses ()
+pub type UnitType = ParenthesisGroupContaining<Nothing>;
 
 /// The shape of a field's type with inner type included
 #[derive(Debug, Clone)]
@@ -245,11 +245,8 @@ impl Parser for TypeShape {
         }
 
         // Try unit ()
-        if let Ok(unit) = input.parse::<UnitType>() {
-            if unit.0 .0.stream().is_empty() {
-                return Ok(TypeShape::Unit);
-            }
-            // Non-empty parens, fall through to Direct with the whole type
+        if input.parse::<UnitType>().is_ok() {
+            return Ok(TypeShape::Unit);
         }
 
         // Collect remaining as Direct type
