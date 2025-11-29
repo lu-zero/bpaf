@@ -48,14 +48,18 @@ fn apply_command_modifiers(
         #with_fallback.command(#command_name)
     };
 
-    let with_long = if let Some(ref alias) = variant.long_alias {
-        quote! { #with_command.long(#alias) }
+    // Chain all long aliases
+    let long_aliases = &variant.long_aliases;
+    let with_long = if !long_aliases.is_empty() {
+        quote! { #with_command #(.long(#long_aliases))* }
     } else {
         with_command
     };
 
-    let with_short = if let Some(alias) = variant.short_alias {
-        quote! { #with_long.short(#alias) }
+    // Chain all short aliases
+    let short_aliases = &variant.short_aliases;
+    let with_short = if !short_aliases.is_empty() {
+        quote! { #with_long #(.short(#short_aliases))* }
     } else {
         with_long
     };
@@ -258,8 +262,8 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
                 hide: variant_attrs.hide,
                 fallback_to_usage: variant_attrs.fallback_to_usage,
                 is_tuple,
-                long_alias: variant_attrs.long_alias,
-                short_alias: variant_attrs.short_alias,
+                long_aliases: variant_attrs.long_aliases,
+                short_aliases: variant_attrs.short_aliases,
                 help: variant_attrs.help,
             })
         });
@@ -288,8 +292,8 @@ struct Ed {
     skip: bool,
     hide: bool,
     fallback_to_usage: bool,
-    long_alias: Option<String>,
-    short_alias: Option<char>,
+    long_aliases: Vec<String>,
+    short_aliases: Vec<char>,
     help: Option<String>,
 }
 
@@ -316,10 +320,14 @@ fn parse_variant_attrs(attrs: &[BpafAttr]) -> Ed {
                     result.fallback_to_usage = true;
                 }
                 BpafInner::Long(long) => {
-                    result.long_alias = long.name.as_ref().map(|g| g.content.as_str().to_string());
+                    if let Some(name) = long.name.as_ref() {
+                        result.long_aliases.push(name.content.as_str().to_string());
+                    }
                 }
                 BpafInner::Short(short) => {
-                    result.short_alias = short.ch.as_ref().map(|g| g.content.value());
+                    if let Some(ch) = short.ch.as_ref() {
+                        result.short_aliases.push(ch.content.value());
+                    }
                 }
                 BpafInner::Help(h) => {
                     let val = h.text.content.value();
@@ -500,10 +508,10 @@ pub struct EnumBranch {
     pub fallback_to_usage: bool,
     /// Whether this is a tuple variant (e.g., Variant(Type))
     pub is_tuple: bool,
-    /// Long alias from #[bpaf(long("alias"))]
-    pub long_alias: Option<String>,
-    /// Short alias from #[bpaf(short('x'))]
-    pub short_alias: Option<char>,
+    /// Long aliases from #[bpaf(long("alias"))]
+    pub long_aliases: Vec<String>,
+    /// Short aliases from #[bpaf(short('x'))]
+    pub short_aliases: Vec<char>,
     /// Explicit help text from #[bpaf(help("..."))]
     pub help: Option<String>,
 }
