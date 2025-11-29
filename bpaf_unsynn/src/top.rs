@@ -97,9 +97,9 @@ fn collect_attributes(iter: &mut TokenIter) -> (Vec<BpafAttr>, Vec<DocInner>) {
 }
 
 /// Parse fields from a brace group
-fn parse_fields(group: &proc_macro2::Group) -> Result<Vec<StructField>> {
+fn parse_fields(group: &BraceGroup) -> Result<Vec<StructField>> {
     let mut fields = Vec::new();
-    let stream = group.stream();
+    let stream = group.0.stream();
     let mut iter = stream.to_token_iter();
 
     loop {
@@ -244,7 +244,7 @@ fn parse_enum_variants(group: &BraceGroup) -> Result<Vec<EnumBranch>> {
                 (convert_tuple_fields(tuple_fields)?, true)
             } else if let Ok(brace_group) = t.parse::<BraceGroup>() {
                 // Struct-style variant: Variant { field: Type, ... }
-                (parse_fields(&brace_group.0)?, false)
+                (parse_fields(&brace_group)?, false)
             } else {
                 // Unit variant
                 (Vec::new(), false)
@@ -920,7 +920,7 @@ impl Parser for Top {
                     let variants = parse_enum_variants(&body_group)?;
                     Body::Enum(variants)
                 } else {
-                    Body::Struct(parse_fields(&body_group.0)?)
+                    Body::Struct(parse_fields(&body_group)?)
                 }
             }
             unsynn::Either::Second(_semicolon) => {
