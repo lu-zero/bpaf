@@ -220,9 +220,9 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
 }
 
 /// Parse enum variants from a brace group
-fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
+fn parse_enum_variants(group: &BraceGroup) -> Result<Vec<EnumBranch>> {
     let mut variants = Vec::new();
-    let stream = group.stream();
+    let stream = group.0.stream();
 
     let mut iter = stream.to_token_iter();
 
@@ -281,6 +281,14 @@ fn parse_enum_variants(group: &proc_macro2::Group) -> Result<Vec<EnumBranch>> {
                 break;
             }
         }
+    }
+    if variants.is_empty() {
+        let mut iter = group.to_token_iter();
+        return unsynn::Error::other(
+            iter.next(),
+            &iter,
+            "Enums must have at least one variant".to_string(),
+        );
     }
 
     Ok(variants)
@@ -909,14 +917,7 @@ impl Parser for Top {
         let body = match input.parse::<unsynn::Either<unsynn::BraceGroup, unsynn::Semicolon>>()? {
             unsynn::Either::First(body_group) => {
                 if is_enum {
-                    let variants = parse_enum_variants(&body_group.0)?;
-                    if variants.is_empty() {
-                        return unsynn::Error::other(
-                            Some(TokenTree::Group(body_group.0)),
-                            &input,
-                            "Enums must have at least one variant".to_string(),
-                        );
-                    }
+                    let variants = parse_enum_variants(&body_group)?;
                     Body::Enum(variants)
                 } else {
                     Body::Struct(parse_fields(&body_group.0)?)

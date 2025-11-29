@@ -1,4 +1,4 @@
-error: Parser failed: expected bpaf_unsynn::top::Top, because Enums must have at least one variant, found Group { delimiter: Brace, stream: TokenStream [], span: #0 bytes(120..122) } at LineColumn { line: 4, column: 15 }
+error: Parser failed: expected alloc::vec::Vec<bpaf_unsynn::top::EnumBranch>, because Enums must have at least one variant, found Group { delimiter: Brace, stream: TokenStream [], span: #0 bytes(120..122) } at LineColumn { line: 4, column: 15 }
  --> tests/ui/empty_enum.rs:4:16
   |
 4 | enum EmptyEnum {}
