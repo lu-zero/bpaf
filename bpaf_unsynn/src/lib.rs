@@ -1,7 +1,31 @@
-//! # Derive macro for bpaf command line parser (using unsynn)
+//! # bpaf_unsynn - Derive macros for bpaf using unsynn
 //!
-//! This is an alternative implementation of `bpaf_derive` that uses `unsynn` instead of `syn`.
-//! For documentation refer to `bpaf` library docs: <https://docs.rs/bpaf/latest/bpaf/>
+//! `bpaf_unsynn` provides derive macros for the [bpaf](https://docs.rs/bpaf) command line parser,
+//! using the lightweight `unsynn` parser instead of `syn`. This is a drop-in replacement for
+//! `bpaf_derive` with identical functionality but lighter dependencies.
+//!
+//! Use the derive macro:
+//! ```
+//! use bpaf::Parser;
+//! use bpaf_unsynn::Bpaf;
+//!
+//! #[derive(Debug, Clone, Bpaf)]
+//! #[bpaf(options)]
+//! struct Args {
+//!     /// Verbose output
+//!     #[bpaf(short, long)]
+//!     verbose: bool,
+//!
+//!     /// Output file
+//!     #[bpaf(short, long, argument("FILE"))]
+//!     output: String,
+//! }
+//!
+//! fn main() {
+//!     let args = Args::parse();
+//!     println!("{:?}", args);
+//! }
+//! ```
 
 mod attrs;
 mod mode;
