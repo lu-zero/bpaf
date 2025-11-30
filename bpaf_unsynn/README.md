@@ -23,13 +23,16 @@ bpaf_unsynn = "0.1"
 Use in your code:
 
 ```rust
-use bpaf::Parser;
 use bpaf_unsynn::Bpaf;
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options)]
 /// Simple command line calculator
 struct Args {
+    /// Operation to perform
+    #[bpaf(external)]
+    operation: Operation,
+
     /// First number
     #[bpaf(positional("X"))]
     x: f64,
@@ -37,26 +40,26 @@ struct Args {
     /// Second number
     #[bpaf(positional("Y"))]
     y: f64,
-
-    /// Operation to perform
-    #[bpaf(short, long)]
-    operation: Operation,
 }
 
 #[derive(Debug, Clone, Bpaf)]
 enum Operation {
     /// Add two numbers
+    #[bpaf(long)]
     Add,
     /// Subtract two numbers
+    #[bpaf(long)]
     Sub,
     /// Multiply two numbers
+    #[bpaf(long)]
     Mul,
     /// Divide two numbers
+    #[bpaf(long)]
     Div,
 }
 
 fn main() {
-    let args = Args::parse();
+    let args = args().run();
     let result = match args.operation {
         Operation::Add => args.x + args.y,
         Operation::Sub => args.x - args.y,
@@ -65,6 +68,14 @@ fn main() {
     };
     println!("{}", result);
 }
+```
+
+**Usage:**
+```bash
+$ calculator 10 5 --add
+15
+$ calculator 10 5 --mul
+50
 ```
 
 ## Features
