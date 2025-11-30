@@ -105,10 +105,9 @@ fn validate_field_ordering(fields: &[StructField]) -> Result<()> {
         // A field is positional if it uses the positional consumer
         let is_positional = matches!(field.attrs.consumer, Some(ConsumerType::Positional { .. }));
 
-        let mut iter = field.ty.to_token_iter();
-
         if seen_positional && !is_positional {
             // Found a named field after a positional field - error!
+            let mut iter = field.name.to_token_iter();
             return unsynn::Error::other(
                 iter.next(),
                 &iter,
@@ -161,20 +160,21 @@ fn parse_fields(group: &BraceGroup) -> Result<Vec<StructField>> {
 
             // Convert to TokenStream for storage
             let ty_tokens = ty_verbatim.to_token_stream();
+            let name_tokens = name.to_token_stream();
 
             // Return the parsed field structure and attributes for validation
-            Ok((name, ty_tokens, shape, bpaf_attrs, doc_comments))
+            Ok((name, name_tokens, ty_tokens, shape, bpaf_attrs, doc_comments))
         });
 
         match field_result {
-            Ok((name, ty_tokens, shape, bpaf_attrs, doc_comments)) => {
+            Ok((name, name_tokens, ty_tokens, shape, bpaf_attrs, doc_comments)) => {
                 // Parse and validate field attributes AFTER the transaction succeeds
                 // This ensures validation errors are propagated, not swallowed
                 let attrs =
                     FieldAttrs::parse_from_attrs(&name.to_string(), &bpaf_attrs, &doc_comments)?;
 
                 fields.push(StructField {
-                    name,
+                    name: name_tokens,
                     ty: ty_tokens,
                     shape,
                     attrs,
@@ -226,7 +226,8 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
             // Extract bpaf attrs and doc comments
             let (bpaf_attrs, doc_comments) = field.extract_attrs();
 
-            let name = quote::format_ident!("{}{}", TUPLE_FIELD_NAME_PREFIX, field_index);
+            let name_ident = quote::format_ident!("{}{}", TUPLE_FIELD_NAME_PREFIX, field_index);
+            let name_tokens = name_ident.to_token_stream();
 
             // Parse field attributes, using positional as default for tuple fields without attrs
             let attrs = if bpaf_attrs.is_empty() && doc_comments.is_empty() {
@@ -240,11 +241,11 @@ fn convert_tuple_fields(tuple_fields: TupleFields) -> Result<Vec<StructField>> {
             } else {
                 // Parse attributes from the collected bpaf attrs
                 // Let the shape-based logic determine the consumer if not explicitly set
-                FieldAttrs::parse_from_attrs(&name.to_string(), &bpaf_attrs, &doc_comments)?
+                FieldAttrs::parse_from_attrs(&name_ident.to_string(), &bpaf_attrs, &doc_comments)?
             };
 
             Ok(Some(StructField {
-                name,
+                name: name_tokens,
                 ty: ty_tokens,
                 shape,
                 attrs,
@@ -490,8 +491,8 @@ fn extract_doc_comments(doc_attrs: &[DocInner]) -> Vec<String> {
 /// Represents a single field in a struct
 #[derive(Clone)]
 pub struct StructField {
-    /// Field name
-    pub name: Ident,
+    /// Field name (stored as tokens for error reporting)
+    pub name: TokenStream,
     /// Field type (stored as tokens)
     pub ty: TokenStream,
     /// The shape of the field's type (includes inner type for Option/Vec)
@@ -1508,7 +1509,7 @@ impl Top {
             fields.iter().map(|field| self.emit_field(field)).collect();
 
         // Extract field names
-        let field_names: Vec<&Ident> = fields.iter().map(|f| &f.name).collect();
+        let field_names: Vec<_> = fields.iter().map(|f| &f.name).collect();
 
         // Generate construct based on target type
         let construct = match construct_target {

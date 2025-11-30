@@ -1,0 +1,5 @@
+error: Parser failed: Field 'verbose' must come before positional fields. All positional items must be placed at the end of the struct. See bpaf documentation for `positional` for details.
+  --> tests/ui/positional_field_ordering.rs:10:5
+   |
+10 |     verbose: bool,
+   |     ^^^^^^^
