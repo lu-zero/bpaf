@@ -1,18 +1,8 @@
 #!/bin/bash
 # Code coverage script for bpaf_unsynn using cargo-llvm-cov
 #
-# IMPORTANT: This is a proc-macro crate. Proc-macros run at compile time,
-# so coverage measures the test code execution, not the proc-macro source.
-# For proc-macros, test pass/fail is the primary validation metric.
-#
 # Prerequisites:
 #   cargo install cargo-llvm-cov
-#
-# Usage:
-#   ./scripts/coverage.sh          # Generate HTML report
-#   ./scripts/coverage.sh --lcov   # Generate LCOV report
-#   ./scripts/coverage.sh --open   # Generate and open HTML report
-#   ./scripts/coverage.sh --help   # Show help
 
 set -euo pipefail
 
@@ -29,8 +19,8 @@ for arg in "$@"; do
         --lcov)
             OUTPUT_FORMAT="lcov"
             ;;
-        --open)
-            OPEN_REPORT="--open"
+        --http)
+            OUTPUT_FORMAT="http"
             ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
@@ -38,8 +28,8 @@ for arg in "$@"; do
             echo "Code coverage using cargo-llvm-cov."
             echo ""
             echo "Options:"
-            echo "  --lcov    Generate LCOV format instead of HTML"
-            echo "  --open    Open HTML report in browser after generation"
+            echo "  --lcov    Generate lcov report"
+            echo "  --http    Open HTML report in browser after generation"
             echo "  --help    Show this help message"
             echo ""
             echo "Note: This is a proc-macro crate. Test pass/fail is the primary"
@@ -56,18 +46,17 @@ if ! command -v cargo-llvm-cov &> /dev/null; then
     exit 1
 fi
 
-echo "=== bpaf_unsynn Coverage ==="
-echo ""
-
 mkdir -p "$COVERAGE_DIR"
 
 # Only include bpaf_unsynn/src/ - exclude bpaf library, tests, rustc, cargo, etc.
 IGNORE_REGEX="(^/rustc|/\.cargo/|/target/|/bpaf/src/|tests/|examples/)"
-
-if [ "$OUTPUT_FORMAT" = "lcov" ]; then
+CMD="cargo llvm-cov --ignore-filename-regex $IGNORE_REGEX"
+if [ "$OUTPUT_FORMAT" = "http" ]; then
+    echo "Generating HTML report..."
+    $CMD --html --output-dir "$COVERAGE_DIR" $OPEN_REPORT
+elif [ "$OUTPUT_FORMAT" = "lcov" ]; then
     echo "Generating LCOV report..."
-    cargo llvm-cov --lcov --output-path "$COVERAGE_DIR/lcov.info" \
-        --ignore-filename-regex "$IGNORE_REGEX"
+    $CMD --lcov --output-path "$COVERAGE_DIR/lcov.info" \
 
     echo ""
     echo "=== Coverage report generated ==="
@@ -85,11 +74,5 @@ if [ "$OUTPUT_FORMAT" = "lcov" ]; then
         fi
     fi
 else
-    echo "Generating HTML report..."
-    cargo llvm-cov --html --output-dir "$COVERAGE_DIR" \
-        --ignore-filename-regex "$IGNORE_REGEX" $OPEN_REPORT
-
-    echo ""
-    echo "=== Coverage report generated ==="
-    echo "HTML report: $COVERAGE_DIR/html/index.html"
+    $CMD
 fi
