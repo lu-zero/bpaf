@@ -20,21 +20,21 @@ struct GuardAttr {
 
 #[test]
 fn guard_accepts_valid() {
-    let parser = GuardAttr::parse();
+    let parser = guard_attr();
     let r = parser.run_inner(&["--value", "42"]).unwrap();
     assert_eq!(r.value, 42);
 }
 
 #[test]
 fn guard_rejects_invalid() {
-    let parser = GuardAttr::parse();
+    let parser = guard_attr();
     let r = parser.run_inner(&["--value", "-1"]);
     assert!(r.is_err());
 }
 
 #[test]
 fn guard_rejects_zero() {
-    let parser = GuardAttr::parse();
+    let parser = guard_attr();
     let r = parser.run_inner(&["--value", "0"]);
     assert!(r.is_err());
 }
@@ -54,7 +54,7 @@ struct HideAttr {
 
 #[test]
 fn hide_still_parses() {
-    let parser = HideAttr::parse();
+    let parser = hide_attr();
 
     // Hidden option still works
     let r = parser.run_inner(&["--hidden"]).unwrap();
@@ -74,7 +74,7 @@ struct HideUsageAttr {
 
 #[test]
 fn hide_usage_still_parses() {
-    let parser = HideUsageAttr::parse();
+    let parser = hide_usage_attr();
     let r = parser.run_inner(&["--internal"]).unwrap();
     assert!(r.internal);
 }
@@ -92,7 +92,7 @@ struct FallbackAttr {
 
 #[test]
 fn fallback_provides_default() {
-    let parser = FallbackAttr::parse();
+    let parser = fallback_attr();
 
     // Without arg, uses fallback
     let r = parser.run_inner(&[]).unwrap();
@@ -120,7 +120,7 @@ struct FallbackWithAttr {
 
 #[test]
 fn fallback_with_calls_function() {
-    let parser = FallbackWithAttr::parse();
+    let parser = fallback_with_attr();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, 99);
@@ -139,7 +139,7 @@ struct GroupHelpAttr {
 
 #[test]
 fn group_help_compiles() {
-    let parser = GroupHelpAttr::parse();
+    let parser = group_help_attr();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -157,7 +157,7 @@ struct DebugFallbackAttr {
 
 #[test]
 fn debug_fallback_compiles() {
-    let parser = DebugFallbackAttr::parse();
+    let parser = debug_fallback_attr();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, 42);
 }
@@ -175,7 +175,7 @@ struct DisplayFallbackAttr {
 
 #[test]
 fn display_fallback_compiles() {
-    let parser = DisplayFallbackAttr::parse();
+    let parser = display_fallback_attr();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, 42);
 }
@@ -207,7 +207,7 @@ struct FormatFallbackAttr {
 
 #[test]
 fn format_fallback_compiles() {
-    let parser = FormatFallbackAttr::parse();
+    let parser = format_fallback_attr();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value.0, "default");
 }
@@ -225,14 +225,14 @@ struct LastAttr {
 
 #[test]
 fn last_compiles_and_parses() {
-    let parser = LastAttr::parse();
+    let parser = last_attr();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
 
 #[test]
 fn last_uses_last_occurrence() {
-    let parser = LastAttr::parse();
+    let parser = last_attr();
     let r = parser
         .run_inner(&["--value", "first", "--value", "second", "--value", "last"])
         .unwrap();
@@ -248,7 +248,7 @@ struct LastWithShort {
 
 #[test]
 fn last_with_mixed_short_long() {
-    let parser = LastWithShort::parse();
+    let parser = last_with_short();
     let r = parser
         .run_inner(&["-o", "first", "--output", "second", "-o", "last"])
         .unwrap();
@@ -264,7 +264,7 @@ struct LastNumeric {
 
 #[test]
 fn last_with_numeric_type() {
-    let parser = LastNumeric::parse();
+    let parser = last_numeric();
     let r = parser
         .run_inner(&["-n", "10", "-n", "20", "--number", "30"])
         .unwrap();
@@ -290,7 +290,7 @@ struct CompleteAttr {
 
 #[test]
 fn complete_compiles() {
-    let _ = CompleteAttr::parse();
+    let _ = complete_attr();
 }
 
 // =============================================================================
@@ -306,7 +306,7 @@ struct CustomUsageAttr {
 
 #[test]
 fn field_custom_usage_compiles() {
-    let parser = CustomUsageAttr::parse();
+    let parser = custom_usage_attr();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, None);
 }

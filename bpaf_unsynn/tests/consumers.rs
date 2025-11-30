@@ -17,7 +17,7 @@ struct SwitchConsumer {
 
 #[test]
 fn switch_explicit() {
-    let parser = SwitchConsumer::parse();
+    let parser = switch_consumer();
 
     let r = parser.run_inner(&[]).unwrap();
     assert!(!r.verbose);
@@ -39,7 +39,7 @@ struct FlagConsumer {
 
 #[test]
 fn flag_with_values() {
-    let parser = FlagConsumer::parse();
+    let parser = flag_consumer();
 
     let r = parser.run_inner(&[]).unwrap();
     assert!(!r.enabled); // absent value
@@ -63,7 +63,7 @@ struct FlagEnum {
 
 #[test]
 fn flag_with_enum_values() {
-    let parser = FlagEnum::parse();
+    let parser = flag_enum();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.mode, Mode::Slow);
@@ -81,7 +81,7 @@ struct FlagString {
 
 #[test]
 fn flag_with_string_values() {
-    let parser = FlagString::parse();
+    let parser = flag_string();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.color, "never");
@@ -99,7 +99,7 @@ struct FlagNumeric {
 
 #[test]
 fn flag_with_numeric_values() {
-    let parser = FlagNumeric::parse();
+    let parser = flag_numeric();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.verbosity, 0);
@@ -124,7 +124,7 @@ struct ArgumentConsumer {
 
 #[test]
 fn argument_with_metavar() {
-    let parser = ArgumentConsumer::parse();
+    let parser = argument_consumer();
 
     let r = parser.run_inner(&["--input", "file.txt"]).unwrap();
     assert_eq!(r.input, "file.txt");
@@ -143,7 +143,7 @@ struct PositionalConsumer {
 
 #[test]
 fn positional_argument() {
-    let parser = PositionalConsumer::parse();
+    let parser = positional_consumer();
 
     let r = parser.run_inner(&["myfile.txt"]).unwrap();
     assert_eq!(r.file, "myfile.txt");
@@ -160,7 +160,7 @@ struct MultiplePositionals {
 
 #[test]
 fn multiple_positional_arguments() {
-    let parser = MultiplePositionals::parse();
+    let parser = multiple_positionals();
 
     let r = parser.run_inner(&["src.txt", "dst.txt"]).unwrap();
     assert_eq!(r.source, "src.txt");
@@ -181,7 +181,7 @@ struct ReqFlagConsumer {
 
 #[test]
 fn req_flag_required() {
-    let parser = ReqFlagConsumer::parse();
+    let parser = req_flag_consumer();
 
     // With required flag
     let r = parser.run_inner(&["--create", "--name", "test"]).unwrap();
@@ -214,7 +214,7 @@ fn check_file(s: String) -> Option<String> {
 
 #[test]
 fn any_with_check() {
-    let parser = AnyConsumer::parse();
+    let parser = any_consumer();
 
     let r = parser.run_inner(&["file.txt"]).unwrap();
     assert_eq!(r.file, "file.txt");
@@ -236,8 +236,8 @@ fn check_input(s: String) -> Option<String> {
 }
 
 #[test]
-fn named_any_consumer() {
-    let parser = NamedAnyConsumer::parse();
+fn test_named_any_consumer() {
+    let parser = named_any_consumer();
 
     // Test with short flag
     let r = parser.run_inner(&["-v", "test"]).unwrap();
@@ -265,7 +265,7 @@ fn custom_parser() -> impl Parser<i32> {
 
 #[test]
 fn external_parser() {
-    let parser = ExternalConsumer::parse();
+    let parser = external_consumer();
 
     let r = parser.run_inner(&["--value", "42"]).unwrap();
     assert_eq!(r.value, 42);
@@ -285,7 +285,7 @@ fn count() -> impl Parser<usize> {
 
 #[test]
 fn external_default_name() {
-    let parser = ExternalDefault::parse();
+    let parser = external_default();
 
     let r = parser.run_inner(&["--count", "10"]).unwrap();
     assert_eq!(r.count, 10);
@@ -305,7 +305,7 @@ struct PureConsumer {
 
 #[test]
 fn pure_value() {
-    let parser = PureConsumer::parse();
+    let parser = pure_consumer();
 
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.value, 42);
@@ -330,7 +330,7 @@ struct PureWithConsumer {
 
 #[test]
 fn pure_with_function() {
-    let parser = PureWithConsumer::parse();
+    let parser = pure_with_consumer();
 
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.value, 100);

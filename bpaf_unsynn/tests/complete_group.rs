@@ -24,7 +24,7 @@ struct CompleteAttr {
 
 #[test]
 fn complete_works() {
-    let parser = CompleteAttr::parse();
+    let parser = complete_attr();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -42,7 +42,7 @@ struct GroupAttr {
 
 #[test]
 fn group_works() {
-    let parser = GroupAttr::parse();
+    let parser = group_attr();
     let r = parser.run_inner(&["--input", "value"]).unwrap();
     assert_eq!(r.input, "value");
 }
@@ -61,8 +61,8 @@ struct MultipleFieldsSameGroup {
 }
 
 #[test]
-fn multiple_fields_same_group() {
-    let parser = MultipleFieldsSameGroup::parse();
+fn test_multiple_fields_same_group() {
+    let parser = multiple_fields_same_group();
     let r = parser
         .run_inner(&["--input", "in.txt", "--output", "out.txt"])
         .unwrap();
@@ -82,8 +82,8 @@ struct CompleteShellRequired {
 }
 
 #[test]
-fn complete_shell_required() {
-    let parser = CompleteShellRequired::parse();
+fn test_complete_shell_required() {
+    let parser = complete_shell_required();
     let r = parser.run_inner(&["--file", "main.rs"]).unwrap();
     assert_eq!(r.file, "main.rs");
 }

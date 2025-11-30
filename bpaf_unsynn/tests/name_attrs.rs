@@ -17,7 +17,7 @@ struct ShortDerived {
 
 #[test]
 fn short_derived_from_field_name() {
-    let parser = ShortDerived::parse();
+    let parser = short_derived();
 
     let r = parser.run_inner(&["-v"]).unwrap();
     assert!(r.verbose);
@@ -33,7 +33,7 @@ struct ShortExplicit {
 
 #[test]
 fn short_explicit_char() {
-    let parser = ShortExplicit::parse();
+    let parser = short_explicit();
 
     let r = parser.run_inner(&["-q"]).unwrap();
     assert!(r.quiet);
@@ -53,7 +53,7 @@ struct LongDerived {
 
 #[test]
 fn long_derived_kebab_case() {
-    let parser = LongDerived::parse();
+    let parser = long_derived();
 
     // Converted to kebab-case
     let r = parser.run_inner(&["--my-option"]).unwrap();
@@ -70,7 +70,7 @@ struct LongExplicit {
 
 #[test]
 fn long_explicit_name() {
-    let parser = LongExplicit::parse();
+    let parser = long_explicit();
 
     let r = parser.run_inner(&["--custom-flag"]).unwrap();
     assert!(r.flag);
@@ -89,7 +89,7 @@ struct ShortLongCombined {
 
 #[test]
 fn short_and_long_both_work() {
-    let parser = ShortLongCombined::parse();
+    let parser = short_long_combined();
 
     // Short works
     let r = parser.run_inner(&["-v"]).unwrap();
@@ -109,7 +109,7 @@ struct ShortLongExplicit {
 
 #[test]
 fn short_and_long_explicit() {
-    let parser = ShortLongExplicit::parse();
+    let parser = short_long_explicit();
 
     let r = parser.run_inner(&["-d"]).unwrap();
     assert!(r.debug);
@@ -134,7 +134,7 @@ fn env_variable_fallback() {
     // Set env var
     std::env::set_var("MY_VAR", "from_env");
 
-    let parser = EnvString::parse();
+    let parser = env_string();
 
     // Without arg, uses env
     let r = parser.run_inner(&[]).unwrap();
@@ -162,7 +162,7 @@ struct EnvConst {
 fn env_from_constant() {
     std::env::set_var(ENV_VAR_NAME, "const_value");
 
-    let parser = EnvConst::parse();
+    let parser = env_const();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, Some("const_value".to_string()));
 
@@ -185,7 +185,7 @@ struct EnvOnlySet {
 fn env_only_reads_from_environment() {
     std::env::set_var("ENV_ONLY_SET_VAR", "env_value");
 
-    let parser = EnvOnlySet::parse();
+    let parser = env_only_set();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, Some("env_value".to_string()));
 
@@ -204,7 +204,7 @@ fn env_only_returns_none_when_unset() {
     // Make sure the var is not set
     std::env::remove_var("ENV_ONLY_UNSET_VAR");
 
-    let parser = EnvOnlyUnset::parse();
+    let parser = env_only_unset();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, None);
 }
@@ -221,7 +221,7 @@ struct EnvOnlyRequiredSet {
 fn env_only_required_uses_env() {
     std::env::set_var("ENV_REQUIRED_SET_VAR", "from_env");
 
-    let parser = EnvOnlyRequiredSet::parse();
+    let parser = env_only_required_set();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, "from_env");
 
@@ -239,7 +239,7 @@ struct EnvOnlyRequiredUnset {
 fn env_only_required_uses_fallback() {
     std::env::remove_var("ENV_REQUIRED_UNSET_VAR");
 
-    let parser = EnvOnlyRequiredUnset::parse();
+    let parser = env_only_required_unset();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, "default_value");
 }
@@ -256,7 +256,7 @@ struct EnvOnlyNumeric {
 fn env_only_numeric_parses() {
     std::env::set_var("ENV_PORT", "8080");
 
-    let parser = EnvOnlyNumeric::parse();
+    let parser = env_only_numeric();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.port, Some(8080));
 
@@ -281,7 +281,7 @@ fn multiple_env_only_fields() {
     std::env::set_var("DB_PORT", "5432");
     std::env::set_var("DB_NAME", "mydb");
 
-    let parser = MultipleEnvOnly::parse();
+    let parser = multiple_env_only();
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.host, Some("localhost".to_string()));
     assert_eq!(r.port, Some(5432));
@@ -305,7 +305,7 @@ struct AllThree {
 
 #[test]
 fn short_long_env_all_work() {
-    let parser = AllThree::parse();
+    let parser = all_three();
 
     // Short
     let r = parser.run_inner(&["-c", "short.cfg"]).unwrap();
@@ -335,7 +335,7 @@ struct ArgumentWithNames {
 
 #[test]
 fn argument_with_short_and_long() {
-    let parser = ArgumentWithNames::parse();
+    let parser = argument_with_names();
 
     // Short with value
     let r = parser.run_inner(&["-n", "Alice"]).unwrap();

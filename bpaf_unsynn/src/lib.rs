@@ -5,7 +5,7 @@
 //! `bpaf_derive` with identical functionality but lighter dependencies.
 //!
 //! Use the derive macro:
-//! ```
+//! ```no_run
 //! use bpaf::Parser;
 //! use bpaf_unsynn::Bpaf;
 //!
@@ -22,8 +22,7 @@
 //! }
 //!
 //! fn main() {
-//!     let args = Args::parse();
-//!     println!("{:?}", args);
+//!     println!("{:?}", args().run());
 //! }
 //! ```
 

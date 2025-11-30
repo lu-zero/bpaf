@@ -38,7 +38,7 @@ struct ExternalNoNames {
 
 #[test]
 fn pure_no_names_compiles() {
-    let parser = PureNoNames::parse();
+    let parser = pure_no_names();
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.unit_field, ());
     assert_eq!(r.name, "test");
@@ -46,7 +46,7 @@ fn pure_no_names_compiles() {
 
 #[test]
 fn pure_with_no_names_compiles() {
-    let parser = PureWithNoNames::parse();
+    let parser = pure_with_no_names();
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.value, 42);
     assert_eq!(r.name, "test");
@@ -54,7 +54,7 @@ fn pure_with_no_names_compiles() {
 
 #[test]
 fn external_no_names_compiles() {
-    let parser = ExternalNoNames::parse();
+    let parser = external_no_names();
     let r = parser.run_inner(&["--test", "value", "--name", "test"]).unwrap();
     assert_eq!(r.field, "value");
     assert_eq!(r.name, "test");

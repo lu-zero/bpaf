@@ -19,7 +19,7 @@ struct DocComments {
 
 #[test]
 fn doc_comments_compile() {
-    let parser = DocComments::parse();
+    let parser = doc_comments();
 
     let r = parser.run_inner(&["--input", "test.txt"]).unwrap();
     assert_eq!(r.input, "test.txt");
@@ -38,7 +38,7 @@ struct HelpExplicit {
 
 #[test]
 fn help_explicit_compiles() {
-    let parser = HelpExplicit::parse();
+    let parser = help_explicit();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -57,7 +57,7 @@ struct DocAndHelp {
 
 #[test]
 fn doc_and_help_combined() {
-    let parser = DocAndHelp::parse();
+    let parser = doc_and_help();
     let r = parser.run_inner(&["--option"]).unwrap();
     assert!(r.option);
 }
@@ -74,7 +74,7 @@ struct WithVersion {
 
 #[test]
 fn version_compiles() {
-    let parser = WithVersion::parse();
+    let parser = with_version();
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.name, "test");
 }
@@ -88,7 +88,7 @@ struct ExplicitVersion {
 
 #[test]
 fn explicit_version_compiles() {
-    let parser = ExplicitVersion::parse();
+    let parser = explicit_version();
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.name, "test");
 }
@@ -109,7 +109,7 @@ struct HeaderFooter {
 
 #[test]
 fn header_footer_compile() {
-    let parser = HeaderFooter::parse();
+    let parser = header_footer();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -126,7 +126,7 @@ struct CustomUsage {
 
 #[test]
 fn custom_usage_compiles() {
-    let parser = CustomUsage::parse();
+    let parser = custom_usage();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -143,7 +143,7 @@ struct WithDescr {
 
 #[test]
 fn descr_compiles() {
-    let parser = WithDescr::parse();
+    let parser = with_descr();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -171,7 +171,7 @@ struct FullyDecorated {
 
 #[test]
 fn fully_decorated_works() {
-    let parser = FullyDecorated::parse();
+    let parser = fully_decorated();
 
     let r = parser.run_inner(&[]).unwrap();
     assert!(!r.verbose);
@@ -200,7 +200,7 @@ struct MultiLineDoc {
 
 #[test]
 fn multi_line_doc_compiles() {
-    let parser = MultiLineDoc::parse();
+    let parser = multi_line_doc();
     let r = parser.run_inner(&[]).unwrap();
     assert!(!r.option);
 }
@@ -230,7 +230,7 @@ struct MultiParagraphDoc {
 
 #[test]
 fn multi_paragraph_doc_splits_correctly() {
-    let parser = MultiParagraphDoc::parse();
+    let parser = multi_paragraph_doc();
 
     // Verify parsing works
     let r = parser.run_inner(&["--verbose"]).unwrap();
@@ -302,7 +302,7 @@ struct FirstParagraphOnly {
 
 #[test]
 fn doc_with_first_paragraph_only() {
-    let parser = FirstParagraphOnly::parse();
+    let parser = first_paragraph_only();
     let help = parser.run_inner(&["--help"]).unwrap_err();
     let help_str = format!("{:?}", help);
     // Verify first paragraph is included
@@ -325,7 +325,7 @@ struct EmptyLineHandling {
 
 #[test]
 fn doc_with_empty_lines() {
-    let parser = EmptyLineHandling::parse();
+    let parser = empty_line_handling();
     let help = parser.run_inner(&["--help"]).unwrap_err();
     let help_str = format!("{:?}", help);
     // Verify paragraphs are separated correctly

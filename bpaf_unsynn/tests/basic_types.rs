@@ -19,7 +19,7 @@ struct BoolField {
 
 #[test]
 fn bool_becomes_switch() {
-    let parser = BoolField::parse();
+    let parser = bool_field();
 
     // Without flag -> false
     let r = parser.run_inner(&[]).unwrap();
@@ -42,7 +42,7 @@ struct StringField {
 
 #[test]
 fn string_becomes_argument() {
-    let parser = StringField::parse();
+    let parser = string_field();
 
     let r = parser.run_inner(&["--name", "Alice"]).unwrap();
     assert_eq!(r.name, "Alice");
@@ -62,7 +62,7 @@ struct NumericFields {
 
 #[test]
 fn numeric_becomes_argument() {
-    let parser = NumericFields::parse();
+    let parser = numeric_fields();
 
     let r = parser
         .run_inner(&["--count", "42", "--value", "-10", "--ratio", "3.14"])
@@ -84,7 +84,7 @@ struct OptionalField {
 
 #[test]
 fn option_becomes_optional() {
-    let parser = OptionalField::parse();
+    let parser = optional_field();
 
     // Without -> None
     let r = parser.run_inner(&[]).unwrap();
@@ -107,7 +107,7 @@ struct VecField {
 
 #[test]
 fn vec_becomes_many() {
-    let parser = VecField::parse();
+    let parser = vec_field();
 
     // No items -> empty vec
     let r = parser.run_inner(&[]).unwrap();
@@ -134,7 +134,7 @@ struct UnitField {
 
 #[test]
 fn unit_with_req_flag() {
-    let parser = UnitField::parse();
+    let parser = unit_field();
 
     let r = parser.run_inner(&["--flag", "--name", "test"]).unwrap();
     assert_eq!(r.flag, ());
@@ -161,7 +161,7 @@ fn parse_opt_vec() -> impl Parser<Vec<String>> {
 #[test]
 fn option_vec_nested() {
     // Verify it compiles and parses
-    let parser = NestedOptionVec::parse().to_options();
+    let parser = nested_option_vec().to_options();
     let r = parser.run_inner(&[]).unwrap();
     // Empty vec becomes Some([]) due to many() semantics
     assert_eq!(r.items, Some(vec![]));
@@ -181,7 +181,7 @@ fn parse_optional_item() -> impl Parser<Option<String>> {
 #[test]
 fn vec_option_nested() {
     // Verify it compiles
-    let _ = NestedVecOption::parse();
+    let _ = nested_vec_option();
 }
 
 // =============================================================================
@@ -204,7 +204,7 @@ fn parse_map() -> impl Parser<HashMap<String, i32>> {
 #[test]
 fn complex_generics_compile() {
     // This compiles, which verifies complex generics in external work
-    let _ = ComplexGenerics::parse();
+    let _ = complex_generics();
 }
 
 // =============================================================================
@@ -221,7 +221,7 @@ struct PathField {
 
 #[test]
 fn pathbuf_becomes_argument() {
-    let parser = PathField::parse();
+    let parser = path_field();
 
     let r = parser.run_inner(&["--path", "/tmp/test"]).unwrap();
     assert_eq!(r.path, PathBuf::from("/tmp/test"));
@@ -240,7 +240,7 @@ struct BoolWithLongName {
 
 #[test]
 fn bool_with_explicit_long_name() {
-    let parser = BoolWithLongName::parse();
+    let parser = bool_with_long_name();
 
     let r = parser.run_inner(&[]).unwrap();
     assert!(!r.enabled);
@@ -263,7 +263,7 @@ struct UnitWithPure {
 
 #[test]
 fn unit_with_pure_attribute() {
-    let parser = UnitWithPure::parse();
+    let parser = unit_with_pure();
 
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.unit_field, ());
@@ -280,7 +280,7 @@ struct UnitWithNaming {
 
 #[test]
 fn unit_with_short_long() {
-    let parser = UnitWithNaming::parse();
+    let parser = unit_with_naming();
 
     // Unit type with naming attributes is always pure (no arguments consumed)
     let r = parser.run_inner(&["--name", "test"]).unwrap();

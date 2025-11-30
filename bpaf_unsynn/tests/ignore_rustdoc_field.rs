@@ -10,7 +10,7 @@ struct IgnoreRustdocField {
 
 #[test]
 fn ignore_rustdoc_on_field() {
-    let parser = IgnoreRustdocField::parse();
+    let parser = ignore_rustdoc_field();
     let r = parser.run_inner(&["--value"]).unwrap();
     assert!(r.value);
 }
@@ -26,7 +26,7 @@ struct IgnoreRustdocNoHelp {
 
 #[test]
 fn ignore_rustdoc_no_explicit_help() {
-    let parser = IgnoreRustdocNoHelp::parse();
+    let parser = ignore_rustdoc_no_help();
     let r = parser.run_inner(&["--flag"]).unwrap();
     assert!(r.flag);
 }
@@ -45,7 +45,7 @@ struct MultipleIgnoreRustdoc {
 
 #[test]
 fn multiple_fields_mixed_rustdoc() {
-    let parser = MultipleIgnoreRustdoc::parse();
+    let parser = multiple_ignore_rustdoc();
     let r = parser
         .run_inner(&["--input", "in.txt", "--output", "out.txt"])
         .unwrap();

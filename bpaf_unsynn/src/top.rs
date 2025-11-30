@@ -6,7 +6,7 @@ use crate::parsing::{
     Attribute, BpafAttr, BpafInner, DocInner, KEnum, KStruct, TokenIter, TupleFields, TypeShape,
     VerbatimUntilComma, Visibility,
 };
-use crate::utils::to_kebab_case;
+use crate::utils::{to_kebab_case, to_snake_case};
 use proc_macro2::{Ident, TokenStream, TokenTree};
 use quote::quote;
 use unsynn::{
@@ -1021,17 +1021,17 @@ impl ToTokens for Top {
 
         // Generate return type based on mode (boxed changes return type for parser/command mode)
         let return_type = match (&self.mode, self.boxed) {
-            (Mode::Options { .. }, _) => quote! { #bpaf::OptionParser<Self> },
+            (Mode::Options { .. }, _) => quote! { #bpaf::OptionParser<#name> },
             (Mode::Command { .. }, true) | (Mode::Parser { .. }, true) => {
-                quote! { Box<dyn #bpaf::Parser<Self>> }
+                quote! { Box<dyn #bpaf::Parser<#name>> }
             }
             (Mode::Command { .. }, false) | (Mode::Parser { .. }, false) => {
-                quote! { impl #bpaf::Parser<Self> }
+                quote! { impl #bpaf::Parser<#name> }
             }
         };
 
-        // Determine function name
-        let default_fn_name = quote::format_ident!("parse");
+        // Determine function name - either custom or derived from type name
+        let default_fn_name = quote::format_ident!("{}", to_snake_case(&self.name.to_string()));
         let fn_name = self.custom_name.as_ref().unwrap_or(&default_fn_name);
 
         // Determine visibility
@@ -1041,13 +1041,12 @@ impl ToTokens for Top {
             quote! { pub }
         };
 
+        // Generate standalone function (not inside impl block)
         tokens.extend(quote! {
-            #[allow(unused_imports)]
-            impl #name {
-                #visibility fn #fn_name() -> #return_type {
-                    use #bpaf::Parser as _;
-                    #parser_body
-                }
+            #visibility fn #fn_name() -> #return_type {
+                #[allow(unused_imports)]
+                use #bpaf::Parser as _;
+                #parser_body
             }
         });
     }

@@ -28,14 +28,14 @@ enum MultiTrailing {
 
 #[test]
 fn trailing_comma_single() {
-    let parser = TrailingComma::parse();
+    let parser = trailing_comma();
     let r = parser.run_inner(&["single", "test"]).unwrap();
     assert_eq!(r, TrailingComma::Single("test".to_string()));
 }
 
 #[test]
 fn trailing_comma_multi() {
-    let parser = MultiTrailing::parse();
+    let parser = multi_trailing();
     let r = parser.run_inner(&["multi", "test", "42"]).unwrap();
     assert_eq!(r, MultiTrailing::Multi("test".to_string(), 42));
 }

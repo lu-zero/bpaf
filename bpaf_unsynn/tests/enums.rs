@@ -22,7 +22,7 @@ enum LogLevel {
 
 #[test]
 fn unit_variants_as_flags() {
-    let parser = LogLevel::parse();
+    let parser = log_level();
 
     let r = parser.run_inner(&["--debug"]).unwrap();
     assert_eq!(r, LogLevel::Debug);
@@ -54,7 +54,7 @@ enum Command {
 
 #[test]
 fn command_variants() {
-    let parser = Command::parse();
+    let parser = command();
 
     let r = parser.run_inner(&["build"]).unwrap();
     assert_eq!(r, Command::Build);
@@ -81,7 +81,7 @@ enum Action {
 
 #[test]
 fn tuple_variant_single_field() {
-    let parser = Action::parse();
+    let parser = action();
 
     let r = parser.run_inner(&["copy", "file.txt"]).unwrap();
     assert_eq!(r, Action::Copy("file.txt".to_string()));
@@ -110,7 +110,7 @@ enum FileOp {
 
 #[test]
 fn struct_variant_fields() {
-    let parser = FileOp::parse();
+    let parser = file_op();
 
     let r = parser
         .run_inner(&["move", "--source", "a.txt", "--dest", "b.txt"])
@@ -160,7 +160,7 @@ enum NamedCmd {
 
 #[test]
 fn explicit_command_names() {
-    let parser = NamedCmd::parse();
+    let parser = named_cmd();
 
     let r = parser.run_inner(&["compile"]).unwrap();
     assert_eq!(r, NamedCmd::Build);
@@ -186,7 +186,7 @@ enum Mode {
 
 #[test]
 fn default_variant_fallback() {
-    let parser = Mode::parse();
+    let parser = mode();
 
     // Without any flag, uses fallback
     let r = parser.run_inner(&[]).unwrap();
@@ -213,7 +213,7 @@ enum MixedAction {
 
 #[test]
 fn mixed_unit_and_tuple() {
-    let parser = MixedAction::parse();
+    let parser = mixed_action();
 
     let r = parser.run_inner(&["init"]).unwrap();
     assert_eq!(r, MixedAction::Init);
@@ -242,7 +242,7 @@ enum Format {
 
 #[test]
 fn command_with_long_alias() {
-    let parser = Format::parse();
+    let parser = format();
 
     // Primary command name
     let r = parser.run_inner(&["json"]).unwrap();
@@ -271,7 +271,7 @@ enum Feature {
 
 #[test]
 fn hidden_variant_still_works() {
-    let parser = Feature::parse();
+    let parser = feature();
 
     let r = parser.run_inner(&["--stable"]).unwrap();
     assert_eq!(r, Feature::Stable);
@@ -299,7 +299,7 @@ enum Op {
 
 #[test]
 fn enum_with_docs() {
-    let parser = Op::parse();
+    let parser = op();
 
     let r = parser.run_inner(&["add"]).unwrap();
     assert_eq!(r, Op::Add);
@@ -320,7 +320,7 @@ enum Required {
 
 #[test]
 fn req_flag_variants() {
-    let parser = Required::parse();
+    let parser = required();
 
     let r = parser.run_inner(&["--create"]).unwrap();
     assert_eq!(r, Required::Create);
@@ -344,14 +344,14 @@ struct BuildOpts {
 enum CmdWithOpts {
     #[bpaf(command)]
     Build {
-        #[bpaf(external(BuildOpts::parse))]
+        #[bpaf(external(build_opts))]
         opts: BuildOpts,
     },
 }
 
 #[test]
 fn variant_with_nested_struct() {
-    let parser = CmdWithOpts::parse();
+    let parser = cmd_with_opts();
 
     let r = parser.run_inner(&["build", "--release"]).unwrap();
     match r {
@@ -377,7 +377,7 @@ enum AdjacentCmd {
 
 #[test]
 fn adjacent_command_variant() {
-    let parser = AdjacentCmd::parse();
+    let parser = adjacent_cmd();
 
     let r = parser
         .run_inner(&["config", "--key", "name", "--value", "test"])
@@ -407,7 +407,7 @@ enum ShortCmd {
 
 #[test]
 fn command_with_short_alias() {
-    let parser = ShortCmd::parse();
+    let parser = short_cmd();
 
     // Primary command name
     let r = parser.run_inner(&["install"]).unwrap();
@@ -438,7 +438,7 @@ enum HiddenCmd {
 
 #[test]
 fn hidden_command_still_works() {
-    let parser = HiddenCmd::parse();
+    let parser = hidden_cmd();
 
     let r = parser.run_inner(&["public"]).unwrap();
     assert_eq!(r, HiddenCmd::Public);
@@ -468,7 +468,7 @@ enum FallbackCmd {
 
 #[test]
 fn command_with_fallback_to_usage() {
-    let parser = FallbackCmd::parse();
+    let parser = fallback_cmd();
 
     // Normal command works
     let r = parser.run_inner(&["run"]).unwrap();
@@ -501,7 +501,7 @@ enum CargoCmd {
 #[test]
 fn enum_with_cargo_helper() {
     // cargo_helper returns impl Parser, needs .to_options()
-    let parser = CargoCmd::parse().to_options();
+    let parser = cargo_cmd().to_options();
 
     let r = parser.run_inner(&["build"]).unwrap();
     assert_eq!(r, CargoCmd::Build);
@@ -527,7 +527,7 @@ enum CmdWithHelp {
 
 #[test]
 fn command_with_doc_comment_help() {
-    let parser = CmdWithHelp::parse();
+    let parser = cmd_with_help();
 
     let r = parser.run_inner(&["first"]).unwrap();
     assert_eq!(r, CmdWithHelp::First);
@@ -565,7 +565,7 @@ enum CmdWithExplicitHelp {
 
 #[test]
 fn command_with_explicit_help_attribute() {
-    let parser = CmdWithExplicitHelp::parse();
+    let parser = cmd_with_explicit_help();
 
     let r = parser.run_inner(&["override"]).unwrap();
     assert_eq!(r, CmdWithExplicitHelp::Override);
@@ -607,7 +607,7 @@ enum CmdWithBothAliases {
 
 #[test]
 fn command_with_short_and_long_alias() {
-    let parser = CmdWithBothAliases::parse();
+    let parser = cmd_with_both_aliases();
 
     // Primary command name
     let r = parser.run_inner(&["install"]).unwrap();
@@ -649,7 +649,7 @@ enum FlagVariantWithFields {
 
 #[test]
 fn flag_variant_with_struct_fields() {
-    let parser = FlagVariantWithFields::parse().to_options();
+    let parser = flag_variant_with_fields().to_options();
 
     let r = parser.run_inner(&["--level", "5"]).unwrap();
     assert_eq!(r, FlagVariantWithFields::Enabled { level: 5 });
@@ -672,7 +672,7 @@ enum MultiVariantNoCommand {
 
 #[test]
 fn multi_variant_without_command() {
-    let parser = MultiVariantNoCommand::parse().to_options();
+    let parser = multi_variant_no_command().to_options();
 
     let r = parser.run_inner(&["--alpha", "test"]).unwrap();
     assert_eq!(
@@ -701,7 +701,7 @@ enum UnitVariantWithHelp {
 
 #[test]
 fn unit_variant_with_help_text() {
-    let parser = UnitVariantWithHelp::parse().to_options();
+    let parser = unit_variant_with_help().to_options();
 
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert_eq!(r, UnitVariantWithHelp::Verbose);
@@ -731,7 +731,7 @@ struct BoxedCmd {
 
 #[test]
 fn boxed_command_mode() {
-    let parser = BoxedCmd::parse().to_options();
+    let parser = boxed_cmd().to_options();
 
     let r = parser.run_inner(&["boxedcmd"]).unwrap();
     assert!(!r.verbose);
@@ -756,7 +756,7 @@ enum TupleMultiType {
 
 #[test]
 fn tuple_variant_multiple_types() {
-    let parser = TupleMultiType::parse();
+    let parser = tuple_multi_type();
 
     let r = parser.run_inner(&["transfer", "account", "100"]).unwrap();
     assert_eq!(
@@ -778,7 +778,7 @@ enum TupleWithOption {
 
 #[test]
 fn tuple_variant_with_option_type() {
-    let parser = TupleWithOption::parse();
+    let parser = tuple_with_option();
 
     // With optional value
     let r = parser.run_inner(&["fetch", "data", "5"]).unwrap();
@@ -802,7 +802,7 @@ enum TupleWithVec {
 
 #[test]
 fn tuple_variant_with_vec_type() {
-    let parser = TupleWithVec::parse();
+    let parser = tuple_with_vec();
 
     let r = parser
         .run_inner(&["process", "task", "arg1", "arg2", "arg3"])
@@ -847,7 +847,7 @@ enum TupleWithFieldAttrs {
 
 #[test]
 fn tuple_variant_with_field_attributes() {
-    let parser = TupleWithFieldAttrs::parse();
+    let parser = tuple_with_field_attrs();
 
     let r = parser
         .run_inner(&["send", "--to", "alice@example.com", "Hello!"])
@@ -883,7 +883,7 @@ enum TupleMixedAttrs {
 
 #[test]
 fn tuple_variant_mixed_field_attrs() {
-    let parser = TupleMixedAttrs::parse();
+    let parser = tuple_mixed_attrs();
 
     let r = parser
         .run_inner(&["create", "myfile", "--count", "5", "--verbose"])
@@ -912,7 +912,7 @@ enum TupleOptionalAttr {
 
 #[test]
 fn tuple_variant_optional_field_attr() {
-    let parser = TupleOptionalAttr::parse();
+    let parser = tuple_optional_attr();
 
     let r = parser.run_inner(&["run", "script.sh"]).unwrap();
     assert_eq!(r, TupleOptionalAttr::Run("script.sh".to_string(), None));
@@ -940,7 +940,7 @@ enum TupleWithDocs {
 
 #[test]
 fn tuple_variant_with_doc_on_field() {
-    let parser = TupleWithDocs::parse();
+    let parser = tuple_with_docs();
 
     let r = parser.run_inner(&["echo", "hello"]).unwrap();
     assert_eq!(r, TupleWithDocs::Echo("hello".to_string()));
@@ -962,7 +962,7 @@ enum TupleVariantEnum {
 
 #[test]
 fn tuple_variant_enum_with_fields() {
-    let parser = TupleVariantEnum::parse();
+    let parser = tuple_variant_enum();
 
     // Test single field tuple variant - fields are positional by default
     let r = parser.run_inner(&["test"]).unwrap();

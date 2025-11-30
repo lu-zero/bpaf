@@ -14,7 +14,7 @@ enum Command {
 
 #[test]
 fn multiple_short_aliases() {
-    let parser = Command::parse();
+    let parser = command();
 
     // Test first short alias - 'b' is a command name alias for build
     let cmd = parser.run_inner(&["b"]).unwrap();
@@ -27,7 +27,7 @@ fn multiple_short_aliases() {
 
 #[test]
 fn multiple_long_aliases() {
-    let parser = Command::parse();
+    let parser = command();
 
     // Test derived command name
     let cmd = parser.run_inner(&["build"]).unwrap();
@@ -54,7 +54,7 @@ fn multiple_long_aliases() {
 
 #[test]
 fn short_and_long_mixed() {
-    let parser = Command::parse();
+    let parser = command();
 
     // run command can use short alias 'r'
     let cmd = parser.run_inner(&["r"]).unwrap();

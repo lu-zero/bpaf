@@ -21,7 +21,7 @@ fn help_with_default_parse() {
         drop(value);
     }
 
-    let parser = Action::parse();
+    let parser = action();
 
     let help = parser
         .run_inner(&["add", "--help"])
@@ -70,7 +70,7 @@ fn command_and_fallback() {
         drop(value);
     }
 
-    let parser = Action::parse().fallback(Action::NoAction).to_options();
+    let parser = action().fallback(Action::NoAction).to_options();
 
     let help = parser
         .run_inner(&["add", "--help"])
@@ -113,7 +113,7 @@ fn pure_optional() {
 
     // pure(Default::default()) should return None for Option<Vec<u32>>
     // Previously, bpaf_unsynn incorrectly returned Some([]) due to implicit .optional() being applied
-    let result = Opts::parse().run().foo;
+    let result = opts().run().foo;
     assert_eq!(result, None, "Expected None, got {:?}", result);
 }
 
@@ -132,7 +132,7 @@ fn command_parsing_works() {
         Delete(String),
     }
 
-    let parser = Action::parse();
+    let parser = action();
 
     let result = parser.run_inner(&["add", "test"]);
     assert!(result.is_ok(), "Should parse add command: {:?}", result);
@@ -154,7 +154,7 @@ fn fallback_works() {
         Help,
     }
 
-    let parser = Action::parse();
+    let parser = action();
 
     // No arguments - should use fallback
     let result = parser.run_inner(&[] as &[&str]);

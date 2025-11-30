@@ -18,7 +18,7 @@ struct DefaultMode {
 
 #[test]
 fn default_mode_creates_parser() {
-    let parser = DefaultMode::parse().to_options();
+    let parser = default_mode().to_options();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -32,8 +32,8 @@ struct ExplicitParserMode {
 }
 
 #[test]
-fn explicit_parser_mode() {
-    let parser = ExplicitParserMode::parse().to_options();
+fn test_explicit_parser_mode() {
+    let parser = explicit_parser_mode().to_options();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -47,7 +47,7 @@ struct OptionsMode {
 
 #[test]
 fn options_mode_creates_option_parser() {
-    let parser = OptionsMode::parse();
+    let parser = options_mode();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -61,7 +61,7 @@ struct BuildCmd {
 
 #[test]
 fn command_mode_derived_name() {
-    let parser = BuildCmd::parse().to_options();
+    let parser = build_cmd().to_options();
     // Command name is lowercase of type name: buildcmd
     let r = parser.run_inner(&["buildcmd", "--name", "test"]).unwrap();
     assert_eq!(r.name, "test");
@@ -76,7 +76,7 @@ struct RunCommand {
 
 #[test]
 fn command_explicit_name() {
-    let parser = RunCommand::parse().to_options();
+    let parser = run_command().to_options();
     // Uses explicit command name: run
     let r = parser.run_inner(&["run", "--target", "debug"]).unwrap();
     assert_eq!(r.target, "debug");
@@ -84,7 +84,7 @@ fn command_explicit_name() {
 
 #[test]
 fn command_explicit_name_derived_fails() {
-    let parser = RunCommand::parse().to_options();
+    let parser = run_command().to_options();
     // Derived name should NOT work when explicit name is specified
     let r = parser.run_inner(&["runcommand", "--target", "debug"]);
     assert!(r.is_err());
@@ -102,7 +102,7 @@ struct InstallCmd {
 
 #[test]
 fn command_with_short_alias() {
-    let parser = InstallCmd::parse().to_options();
+    let parser = install_cmd().to_options();
 
     // Primary command name
     let r = parser.run_inner(&["install", "--package", "foo"]).unwrap();
@@ -125,7 +125,7 @@ struct RemoveCmd {
 
 #[test]
 fn command_with_long_alias() {
-    let parser = RemoveCmd::parse().to_options();
+    let parser = remove_cmd().to_options();
 
     // Primary command name
     let r = parser.run_inner(&["rm", "--target", "foo"]).unwrap();
@@ -148,7 +148,7 @@ struct UpdateCmd {
 
 #[test]
 fn command_with_both_aliases() {
-    let parser = UpdateCmd::parse().to_options();
+    let parser = update_cmd().to_options();
 
     // Primary command name
     let r = parser.run_inner(&["update"]).unwrap();
@@ -176,7 +176,7 @@ struct DeployCmd {
 
 #[test]
 fn command_with_help() {
-    let parser = DeployCmd::parse().to_options();
+    let parser = deploy_cmd().to_options();
 
     let r = parser.run_inner(&["deploy"]).unwrap();
     assert!(!r.force);
@@ -209,7 +209,7 @@ struct AdjacentStruct {
 
 #[test]
 fn adjacent_struct_parses() {
-    let parser = AdjacentStruct::parse().to_options();
+    let parser = adjacent_struct().to_options();
     let r = parser.run_inner(&["-r", "-w", "100"]).unwrap();
     assert_eq!(r.width, 100);
 }
@@ -226,7 +226,7 @@ struct OptionsAdjacent {
 
 #[test]
 fn options_with_adjacent() {
-    let parser = OptionsAdjacent::parse();
+    let parser = options_adjacent();
     let r = parser.run_inner(&["-f", "-v", "42"]).unwrap();
     assert_eq!(r.value, 42);
 }
@@ -244,7 +244,7 @@ struct WithGenerate {
 #[test]
 fn generate_custom_name() {
     // Generated method is make_parser instead of parse
-    let parser = WithGenerate::make_parser();
+    let parser = make_parser();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -258,7 +258,7 @@ struct GenerateParserMode {
 
 #[test]
 fn generate_with_parser_mode() {
-    let parser = GenerateParserMode::custom_fn().to_options();
+    let parser = custom_fn().to_options();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -276,7 +276,7 @@ struct PrivateParser {
 #[test]
 fn private_parser_compiles() {
     // Private still generates a method, just not pub
-    let parser = PrivateParser::parse();
+    let parser = private_parser();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -293,7 +293,7 @@ struct BoxedOptionsParser {
 
 #[test]
 fn boxed_options_parser_compiles() {
-    let parser = BoxedOptionsParser::parse();
+    let parser = boxed_options_parser();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -310,7 +310,7 @@ struct BoxedParserMode {
 fn boxed_parser_mode_compiles() {
     // In parser mode, we get a Parser, not OptionParser
     // Wrap it in to_options() to test
-    let parser = BoxedParserMode::parse().to_options();
+    let parser = boxed_parser_mode().to_options();
     let r = parser.run_inner(&["--flag"]).unwrap();
     assert!(r.flag);
 
@@ -331,7 +331,7 @@ struct WithGroupHelp {
 
 #[test]
 fn group_help_at_struct_level() {
-    let parser = WithGroupHelp::parse().to_options();
+    let parser = with_group_help().to_options();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -351,7 +351,7 @@ struct CombinedAttrs {
 
 #[test]
 fn combined_struct_attrs() {
-    let parser = CombinedAttrs::my_parser();
+    let parser = my_parser();
     let r = parser
         .run_inner(&["--verbose", "--input", "test.txt"])
         .unwrap();
@@ -369,7 +369,7 @@ struct StatusCmd;
 
 #[test]
 fn unit_struct_command() {
-    let parser = StatusCmd::parse().to_options();
+    let parser = status_cmd().to_options();
     // Command name is lowercase: statuscmd
     let r = parser.run_inner(&["statuscmd"]).unwrap();
     assert_eq!(r, StatusCmd);
@@ -388,7 +388,7 @@ struct Inner {
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
 #[bpaf(options)]
 struct Outer {
-    #[bpaf(external(Inner::parse))]
+    #[bpaf(external(inner))]
     inner: Inner,
     #[bpaf(long)]
     outer_flag: bool,
@@ -396,7 +396,7 @@ struct Outer {
 
 #[test]
 fn nested_struct_external() {
-    let parser = Outer::parse();
+    let parser = outer();
     let r = parser
         .run_inner(&["--inner-value", "test", "--outer-flag"])
         .unwrap();
@@ -425,8 +425,8 @@ struct FullyDecoratedOptions {
 }
 
 #[test]
-fn fully_decorated_options() {
-    let parser = FullyDecoratedOptions::parse();
+fn test_fully_decorated_options() {
+    let parser = fully_decorated_options();
     let r = parser
         .run_inner(&["--verbose", "--input", "test.txt"])
         .unwrap();
@@ -447,7 +447,7 @@ struct FallbackToUsageOptions {
 
 #[test]
 fn fallback_to_usage_compiles() {
-    let parser = FallbackToUsageOptions::parse();
+    let parser = fallback_to_usage_options();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -465,7 +465,7 @@ struct TopLevelHide {
 
 #[test]
 fn top_level_hide_compiles() {
-    let parser = TopLevelHide::parse();
+    let parser = top_level_hide();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -479,7 +479,7 @@ struct TopLevelHideUsage {
 
 #[test]
 fn top_level_hide_usage_compiles() {
-    let parser = TopLevelHideUsage::parse();
+    let parser = top_level_hide_usage();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -493,7 +493,7 @@ struct TopLevelCustomUsage {
 
 #[test]
 fn top_level_custom_usage_compiles() {
-    let parser = TopLevelCustomUsage::parse();
+    let parser = top_level_custom_usage();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -515,14 +515,14 @@ struct TopLevelGuard {
 
 #[test]
 fn top_level_guard_passes() {
-    let parser = TopLevelGuard::parse().to_options();
+    let parser = top_level_guard().to_options();
     let r = parser.run_inner(&["--value", "42"]).unwrap();
     assert_eq!(r.value, 42);
 }
 
 #[test]
 fn top_level_guard_fails() {
-    let parser = TopLevelGuard::parse().to_options();
+    let parser = top_level_guard().to_options();
     let r = parser.run_inner(&["--value", "-5"]);
     assert!(r.is_err());
 }
@@ -544,7 +544,7 @@ struct TopLevelFallbackWith {
 
 #[test]
 fn top_level_fallback_with_uses_fallback() {
-    let parser = TopLevelFallbackWith::parse().to_options();
+    let parser = top_level_fallback_with().to_options();
     // No arguments - should use fallback
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, 100);
@@ -552,7 +552,7 @@ fn top_level_fallback_with_uses_fallback() {
 
 #[test]
 fn top_level_fallback_with_uses_value() {
-    let parser = TopLevelFallbackWith::parse().to_options();
+    let parser = top_level_fallback_with().to_options();
     let r = parser.run_inner(&["--value", "42"]).unwrap();
     assert_eq!(r.value, 42);
 }
@@ -574,7 +574,7 @@ struct TopLevelComplete {
 
 #[test]
 fn top_level_complete_compiles() {
-    let parser = TopLevelComplete::parse().to_options();
+    let parser = top_level_complete().to_options();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -598,7 +598,7 @@ struct TopLevelCompleteAndGroup {
 
 #[test]
 fn top_level_complete_and_group_compiles() {
-    let parser = TopLevelCompleteAndGroup::parse().to_options();
+    let parser = top_level_complete_and_group().to_options();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -616,7 +616,7 @@ struct CargoHelperOptions {
 
 #[test]
 fn cargo_helper_with_options_mode() {
-    let parser = CargoHelperOptions::parse();
+    let parser = cargo_helper_options();
     // cargo_helper strips the first argument if it matches "mycargo"
     // With normal args (not starting with "mycargo"), it works as normal
     let r = parser.run_inner(&["--verbose"]).unwrap();
@@ -641,7 +641,7 @@ struct ParserWithDocs {
 
 #[test]
 fn parser_mode_with_doc_comments() {
-    let parser = ParserWithDocs::parse().to_options();
+    let parser = parser_with_docs().to_options();
     let r = parser.run_inner(&["--field", "test"]).unwrap();
     assert_eq!(r.field, "test");
 
@@ -664,7 +664,7 @@ struct BoxedParserWithDocs {
 
 #[test]
 fn boxed_parser_mode_with_doc_comments() {
-    let parser = BoxedParserWithDocs::parse().to_options();
+    let parser = boxed_parser_with_docs().to_options();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }

@@ -19,8 +19,8 @@ struct CompleteShellFile {
 }
 
 #[test]
-fn complete_shell_file() {
-    let parser = CompleteShellFile::parse();
+fn test_complete_shell_file() {
+    let parser = complete_shell_file();
     let r = parser.run_inner(&["--file", "test.txt"]).unwrap();
     assert_eq!(r.file, "test.txt");
 }
@@ -37,8 +37,8 @@ struct CompleteShellWithMask {
 }
 
 #[test]
-fn complete_shell_with_mask() {
-    let parser = CompleteShellWithMask::parse();
+fn test_complete_shell_with_mask() {
+    let parser = complete_shell_with_mask();
     let r = parser.run_inner(&["--source", "main.rs"]).unwrap();
     assert_eq!(r.source, "main.rs");
 }
@@ -56,7 +56,7 @@ struct CompleteShellOptional {
 
 #[test]
 fn complete_shell_with_optional() {
-    let parser = CompleteShellOptional::parse();
+    let parser = complete_shell_optional();
 
     let r = parser.run_inner(&["--config", "config.toml"]).unwrap();
     assert_eq!(r.config, Some("config.toml".to_string()));
@@ -77,8 +77,8 @@ struct CompleteShellDir {
 }
 
 #[test]
-fn complete_shell_dir() {
-    let parser = CompleteShellDir::parse();
+fn test_complete_shell_dir() {
+    let parser = complete_shell_dir();
     let r = parser.run_inner(&["--directory", "/tmp"]).unwrap();
     assert_eq!(r.directory, "/tmp");
 }
@@ -96,7 +96,7 @@ struct CompleteShellPositional {
 
 #[test]
 fn complete_shell_on_positional() {
-    let parser = CompleteShellPositional::parse();
+    let parser = complete_shell_positional();
     let r = parser.run_inner(&["myfile.txt"]).unwrap();
     assert_eq!(r.file, "myfile.txt");
 }
@@ -129,7 +129,7 @@ fn complete_value_parser() -> impl Parser<String> {
 
 #[test]
 fn complete_attribute() {
-    let parser = CompleteAttr::parse();
+    let parser = complete_attr();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }
@@ -165,7 +165,7 @@ fn complete_optional_parser() -> impl Parser<OptConfig> {
 
 #[test]
 fn complete_with_optional() {
-    let parser = CompleteOptional::parse();
+    let parser = complete_optional();
 
     let r = parser.run_inner(&["--config", "value"]).unwrap();
     assert_eq!(r.config.0, Some("value".to_string()));
@@ -191,8 +191,8 @@ fn group_input_parser() -> impl Parser<String> {
 }
 
 #[test]
-fn group_with_complete() {
-    let parser = GroupWithComplete::parse();
+fn test_group_with_complete() {
+    let parser = group_with_complete();
     let r = parser.run_inner(&["--input", "value"]).unwrap();
     assert_eq!(r.input, "value");
 }
@@ -241,8 +241,8 @@ fn group_output_parser() -> impl Parser<OptOutput> {
 }
 
 #[test]
-fn multiple_fields_same_group() {
-    let parser = MultipleFieldsSameGroup::parse();
+fn test_multiple_fields_same_group() {
+    let parser = multiple_fields_same_group();
 
     let r = parser
         .run_inner(&["--input", "in.txt", "--output", "out.txt"])
@@ -268,7 +268,7 @@ struct CompleteShellMany {
 
 #[test]
 fn complete_shell_with_many() {
-    let parser = CompleteShellMany::parse();
+    let parser = complete_shell_many();
 
     let r = parser.run_inner(&["--files", "a.txt", "--files", "b.txt"]).unwrap();
     assert_eq!(r.files, vec!["a.txt", "b.txt"]);

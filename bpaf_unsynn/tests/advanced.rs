@@ -29,7 +29,7 @@ struct TypedAny {
 
 #[test]
 fn typed_any_works() {
-    let parser = TypedAny::parse();
+    let parser = typed_any();
     let r = parser.run_inner(&["file.txt"]).unwrap();
     assert_eq!(r.file, std::path::PathBuf::from("file.txt"));
 }
@@ -58,7 +58,7 @@ fn tags_parser() -> impl Parser<Tags> {
 
 #[test]
 fn collect_into_hashset() {
-    let parser = CollectAttr::parse();
+    let parser = collect_attr();
     let r = parser
         .run_inner(&["--tag", "a", "--tag", "b", "--tag", "a"])
         .unwrap();
@@ -89,7 +89,7 @@ struct AnywhereAttr {
 
 #[test]
 fn anywhere_on_any() {
-    let parser = AnywhereAttr::parse();
+    let parser = anywhere_attr();
     let r = parser.run_inner(&["hello"]).unwrap();
     assert_eq!(r.arg, Some("hello".to_string()));
 }
@@ -107,7 +107,7 @@ struct NonStrictPositional {
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
 #[bpaf(options)]
 struct NonStrictOpts {
-    #[bpaf(external(NonStrictPositional::parse))]
+    #[bpaf(external(non_strict_positional))]
     pos: NonStrictPositional,
     #[bpaf(long)]
     verbose: bool,
@@ -115,7 +115,7 @@ struct NonStrictOpts {
 
 #[test]
 fn non_strict_allows_flags_after() {
-    let parser = NonStrictOpts::parse();
+    let parser = non_strict_opts();
     // In non-strict mode, positional doesn't consume everything
     let r = parser.run_inner(&["myarg", "--verbose"]).unwrap();
     assert_eq!(r.pos.arg, "myarg");
@@ -137,7 +137,7 @@ struct IgnoreRustdocAttr {
 
 #[test]
 fn ignore_rustdoc_compiles() {
-    let parser = IgnoreRustdocAttr::parse();
+    let parser = ignore_rustdoc_attr();
     let r = parser.run_inner(&["--value"]).unwrap();
     assert!(r.value);
 }
@@ -163,7 +163,7 @@ struct WithOtherAttrs {
 
 #[test]
 fn ignores_non_bpaf_attributes() {
-    let parser = WithOtherAttrs::parse();
+    let parser = with_other_attrs();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -184,7 +184,7 @@ struct WithMixedAttrs {
 
 #[test]
 fn ignores_other_field_attributes() {
-    let parser = WithMixedAttrs::parse();
+    let parser = with_mixed_attrs();
     let r = parser.run_inner(&["--output-file", "test.txt"]).unwrap();
     assert_eq!(r.output, "test.txt");
     assert!(!r.quiet);
@@ -203,7 +203,7 @@ struct CustomPathAttr {
 
 #[test]
 fn custom_path_compiles() {
-    let parser = CustomPathAttr::parse();
+    let parser = custom_path_attr();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -223,7 +223,7 @@ enum MultiFieldTuple {
 
 #[test]
 fn multi_field_tuple_two_fields() {
-    let parser = MultiFieldTuple::parse();
+    let parser = multi_field_tuple();
     let r = parser.run_inner(&["copy", "src.txt", "dst.txt"]).unwrap();
     assert_eq!(
         r,
@@ -233,7 +233,7 @@ fn multi_field_tuple_two_fields() {
 
 #[test]
 fn multi_field_tuple_three_fields() {
-    let parser = MultiFieldTuple::parse();
+    let parser = multi_field_tuple();
     // All three fields are positional
     let r = parser
         .run_inner(&["move", "src.txt", "dst.txt", "backup.txt"])
@@ -262,7 +262,7 @@ struct CargoHelperAttr {
 #[test]
 fn cargo_helper_compiles() {
     // cargo_helper returns impl Parser, needs .to_options()
-    let parser = CargoHelperAttr::parse().to_options();
+    let parser = cargo_helper_attr().to_options();
     let r = parser.run_inner(&["--verbose"]).unwrap();
     assert!(r.verbose);
 }
@@ -287,17 +287,17 @@ struct OptPair(Option<AdjacentPair>);
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
 #[bpaf(options)]
 struct AdjacentFieldTest {
-    #[bpaf(external(adjacent_pair))]
+    #[bpaf(external(test_adjacent_pair))]
     pair: OptPair,
 }
 
-fn adjacent_pair() -> impl Parser<OptPair> {
-    AdjacentPair::parse().optional().map(OptPair)
+fn test_adjacent_pair() -> impl Parser<OptPair> {
+    adjacent_pair().optional().map(OptPair)
 }
 
 #[test]
 fn adjacent_via_struct() {
-    let parser = AdjacentFieldTest::parse();
+    let parser = adjacent_field_test();
     let r = parser.run_inner(&["--key", "k", "--value", "v"]).unwrap();
     assert!(r.pair.0.is_some());
     let pair = r.pair.0.unwrap();
@@ -321,7 +321,7 @@ struct CompleteTest {
 
 #[test]
 fn complete_attribute_works() {
-    let parser = CompleteTest::parse().to_options();
+    let parser = complete_test().to_options();
     let r = parser.run_inner(&["--value", "test"]).unwrap();
     assert_eq!(r.value, "test");
 }

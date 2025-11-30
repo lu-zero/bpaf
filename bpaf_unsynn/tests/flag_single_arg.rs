@@ -19,7 +19,7 @@ struct CorrectFlagUsage {
 
 #[test]
 fn test_correct_flag_usage() {
-    let parser = CorrectFlagUsage::parse();
+    let parser = correct_flag_usage();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.enabled, false); // absent value

@@ -18,7 +18,7 @@ struct MapAttr {
 
 #[test]
 fn map_transforms_value() {
-    let parser = MapAttr::parse();
+    let parser = map_attr();
 
     let r = parser.run_inner(&["--value", "21"]).unwrap();
     assert_eq!(r.value, 42);
@@ -47,7 +47,7 @@ fn hex_value() -> impl Parser<u32> {
 
 #[test]
 fn parse_with_custom_parser() {
-    let parser = ParseAttr::parse();
+    let parser = parse_attr();
 
     let r = parser.run_inner(&["--value", "ff"]).unwrap();
     assert_eq!(r.value, 255);
@@ -65,8 +65,8 @@ struct OptionalExplicit {
 }
 
 #[test]
-fn optional_explicit() {
-    let parser = OptionalExplicit::parse();
+fn test_optional_explicit() {
+    let parser = optional_explicit();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, None);
@@ -87,8 +87,8 @@ struct ManyExplicit {
 }
 
 #[test]
-fn many_explicit() {
-    let parser = ManyExplicit::parse();
+fn test_many_explicit() {
+    let parser = many_explicit();
 
     let r = parser.run_inner(&[]).unwrap();
     assert!(r.values.is_empty());
@@ -112,7 +112,7 @@ struct SomeAttr {
 
 #[test]
 fn some_requires_at_least_one() {
-    let parser = SomeAttr::parse();
+    let parser = some_attr();
 
     // Fails without values
     let r = parser.run_inner(&[]);
@@ -151,7 +151,7 @@ fn catch_value() -> impl Parser<CatchResult> {
 #[test]
 fn catch_compiles() {
     // Verify the derive compiles with catch
-    let _ = CatchAttr::parse();
+    let _ = catch_attr();
 }
 
 // =============================================================================
@@ -171,7 +171,7 @@ fn count_verbose() -> impl Parser<usize> {
 
 #[test]
 fn count_compiles_and_works() {
-    let parser = CountAttr::parse().to_options();
+    let parser = count_attr().to_options();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.verbosity, 0);
@@ -207,7 +207,7 @@ fn strict_args() -> impl Parser<String> {
 
 #[test]
 fn strict_positional() {
-    let parser = StrictAttr::parse();
+    let parser = strict_attr();
 
     // After --, everything is positional
     let r = parser.run_inner(&["--", "-a", "-b"]).unwrap();
@@ -227,7 +227,7 @@ struct ChainedPostParse {
 
 #[test]
 fn chained_map_then_optional() {
-    let parser = ChainedPostParse::parse();
+    let parser = chained_post_parse();
 
     let r = parser.run_inner(&[]).unwrap();
     assert_eq!(r.value, None);
@@ -257,7 +257,7 @@ struct DirectParse {
 
 #[test]
 fn direct_parse_attribute() {
-    let parser = DirectParse::parse();
+    let parser = direct_parse();
 
     let r = parser.run_inner(&["--count", "42"]).unwrap();
     assert_eq!(r.count, 42);
@@ -280,7 +280,7 @@ struct DirectCollect {
 
 #[test]
 fn direct_collect_attribute() {
-    let parser = DirectCollect::parse();
+    let parser = direct_collect();
 
     let r = parser.run_inner(&[]).unwrap();
     assert!(r.items.is_empty());

@@ -13,7 +13,7 @@ struct DirectCatchOptional {
 
 #[test]
 fn direct_catch_with_optional() {
-    let parser = DirectCatchOptional::parse();
+    let parser = direct_catch_optional();
 
     // Valid number - succeeds
     let r = parser.run_inner(&["--value", "42"]).unwrap();
@@ -33,7 +33,7 @@ struct DirectCatchMany {
 
 #[test]
 fn direct_catch_with_many() {
-    let parser = DirectCatchMany::parse();
+    let parser = direct_catch_many();
 
     // Valid files - succeeds
     let r = parser
@@ -55,7 +55,7 @@ struct DirectCatchSome {
 
 #[test]
 fn direct_catch_with_some() {
-    let parser = DirectCatchSome::parse();
+    let parser = direct_catch_some();
 
     // Valid args - succeeds
     let r = parser.run_inner(&["--args", "a", "--args", "b"]).unwrap();
@@ -80,7 +80,7 @@ struct DirectCount {
 
 #[test]
 fn direct_count_attribute() {
-    let parser = DirectCount::parse();
+    let parser = direct_count();
 
     // One flag
     let r = parser.run_inner(&["-v"]).unwrap();
@@ -110,7 +110,7 @@ struct DirectAdjacent {
 
 #[test]
 fn direct_adjacent_attribute() {
-    let parser = DirectAdjacent::parse();
+    let parser = direct_adjacent();
 
     // Adjacent at field level requires = syntax
     let r = parser.run_inner(&["--key=foo", "--value", "bar"]).unwrap();
@@ -131,7 +131,7 @@ struct DirectStrict {
 
 #[test]
 fn direct_strict_attribute() {
-    let parser = DirectStrict::parse();
+    let parser = direct_strict();
 
     // Strict requires -- before positional arguments
     let r = parser.run_inner(&["--", "arg1", "arg2"]).unwrap();
@@ -153,7 +153,7 @@ struct DirectNonStrict {
 
 #[test]
 fn direct_non_strict_attribute() {
-    let parser = DirectNonStrict::parse();
+    let parser = direct_non_strict();
 
     // In non-strict mode, flags can appear after positionals
     let r = parser.run_inner(&["value", "--flag"]).unwrap();

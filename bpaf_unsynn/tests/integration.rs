@@ -16,14 +16,14 @@ struct Required {
 
 #[test]
 fn missing_required_fails() {
-    let parser = Required::parse();
+    let parser = required();
     let r = parser.run_inner(&[]);
     assert!(r.is_err());
 }
 
 #[test]
 fn required_with_value_succeeds() {
-    let parser = Required::parse();
+    let parser = required();
     let r = parser.run_inner(&["--name", "test"]).unwrap();
     assert_eq!(r.name, "test");
 }
@@ -41,14 +41,14 @@ struct NumericParsing {
 
 #[test]
 fn invalid_number_fails() {
-    let parser = NumericParsing::parse();
+    let parser = numeric_parsing();
     let r = parser.run_inner(&["--count", "not-a-number"]);
     assert!(r.is_err());
 }
 
 #[test]
 fn valid_number_succeeds() {
-    let parser = NumericParsing::parse();
+    let parser = numeric_parsing();
     let r = parser.run_inner(&["--count", "42"]).unwrap();
     assert_eq!(r.count, 42);
 }
@@ -72,7 +72,7 @@ struct MultipleArgs {
 
 #[test]
 fn complex_args_full() {
-    let parser = MultipleArgs::parse();
+    let parser = multiple_args();
     let r = parser
         .run_inner(&[
             "-v", "-o", "out.txt", "-i", "a.txt", "--input", "b.txt", "build",
@@ -87,7 +87,7 @@ fn complex_args_full() {
 
 #[test]
 fn complex_args_minimal() {
-    let parser = MultipleArgs::parse();
+    let parser = multiple_args();
     let r = parser.run_inner(&[]).unwrap();
 
     assert!(!r.verbose);
@@ -111,7 +111,7 @@ struct AttachedValues {
 
 #[test]
 fn equals_syntax_works() {
-    let parser = AttachedValues::parse();
+    let parser = attached_values();
     let r = parser.run_inner(&["--config=test.cfg", "-n42"]).unwrap();
     assert_eq!(r.config, "test.cfg");
     assert_eq!(r.number, 42);
@@ -119,7 +119,7 @@ fn equals_syntax_works() {
 
 #[test]
 fn space_syntax_works() {
-    let parser = AttachedValues::parse();
+    let parser = attached_values();
     let r = parser
         .run_inner(&["--config", "test.cfg", "-n", "42"])
         .unwrap();
@@ -152,19 +152,19 @@ struct RunOpts {
 enum Cargo {
     #[bpaf(command)]
     Build {
-        #[bpaf(external(BuildOpts::parse))]
+        #[bpaf(external(build_opts))]
         opts: BuildOpts,
     },
     #[bpaf(command)]
     Run {
-        #[bpaf(external(RunOpts::parse))]
+        #[bpaf(external(run_opts))]
         opts: RunOpts,
     },
 }
 
 #[test]
 fn subcommand_build() {
-    let parser = Cargo::parse();
+    let parser = cargo();
     let r = parser
         .run_inner(&["build", "--release", "--target", "x86_64"])
         .unwrap();
@@ -180,7 +180,7 @@ fn subcommand_build() {
 
 #[test]
 fn subcommand_run() {
-    let parser = Cargo::parse();
+    let parser = cargo();
     let r = parser
         .run_inner(&["run", "--bin", "myapp", "arg1", "arg2"])
         .unwrap();
@@ -211,7 +211,7 @@ enum Verbosity {
 
 #[test]
 fn mutually_exclusive_options() {
-    let parser = Verbosity::parse();
+    let parser = verbosity();
 
     let r = parser.run_inner(&["--quiet"]).unwrap();
     assert_eq!(r, Verbosity::Quiet);
@@ -238,7 +238,7 @@ struct CommonOpts {
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
 #[bpaf(options)]
 struct AppOpts {
-    #[bpaf(external(CommonOpts::parse))]
+    #[bpaf(external(common_opts))]
     common: CommonOpts,
     #[bpaf(long)]
     dry_run: bool,
@@ -246,7 +246,7 @@ struct AppOpts {
 
 #[test]
 fn flat_composition() {
-    let parser = AppOpts::parse();
+    let parser = app_opts();
     let r = parser
         .run_inner(&["--verbose", "--config", "app.cfg", "--dry-run"])
         .unwrap();
@@ -271,7 +271,7 @@ struct CpCommand {
 
 #[test]
 fn multiple_positionals() {
-    let parser = CpCommand::parse();
+    let parser = cp_command();
     let r = parser.run_inner(&["src.txt", "dst.txt"]).unwrap();
 
     assert_eq!(r.source, "src.txt");
@@ -300,7 +300,7 @@ struct GitLike {
 
 #[test]
 fn realistic_cli() {
-    let parser = GitLike::parse();
+    let parser = git_like();
 
     // Basic usage
     let r = parser.run_inner(&["-v"]).unwrap();
@@ -346,7 +346,7 @@ struct PathArgs {
 
 #[test]
 fn pathbuf_args() {
-    let parser = PathArgs::parse();
+    let parser = path_args();
     let r = parser
         .run_inner(&["--input", "/home/user/file.txt", "--output", "/tmp/out.txt"])
         .unwrap();
@@ -372,7 +372,7 @@ struct Flags {
 
 #[test]
 fn multiple_short_flags() {
-    let parser = Flags::parse();
+    let parser = flags();
 
     let r = parser.run_inner(&["-a"]).unwrap();
     assert!(r.all);
