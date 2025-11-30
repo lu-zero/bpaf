@@ -1,5 +1,4 @@
 // This test verifies that unknown attributes are rejected
-// Currently bpaf_unsynn silently ignores them - this should be fixed
 
 #[derive(Debug, Clone, bpaf_unsynn::Bpaf)]
 #[bpaf(options)]

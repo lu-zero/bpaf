@@ -1,5 +1,5 @@
 error: Unexpected token: expecting bpaf_unsynn::attrs::FieldAttrs
- --> tests/ui/unknown_attribute.rs:7:12
+ --> tests/ui/unknown_attribute.rs:6:12
   |
-7 |     #[bpaf(foobar_unknown)]
+6 |     #[bpaf(foobar_unknown)]
   |            ^^^^^^^^^^^^^^
