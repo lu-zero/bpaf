@@ -145,10 +145,10 @@ fn direct_strict_attribute() {
 #[derive(Debug, Clone, PartialEq, bpaf_unsynn::Bpaf)]
 #[bpaf(options)]
 struct DirectNonStrict {
-    #[bpaf(positional("ARG"), non_strict)]
-    arg: String,
     #[bpaf(short, long, switch)]
     flag: bool,
+    #[bpaf(positional("ARG"), non_strict)]
+    arg: String,
 }
 
 #[test]

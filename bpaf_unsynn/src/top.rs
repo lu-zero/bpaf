@@ -97,6 +97,38 @@ fn collect_attributes(iter: &mut TokenIter) -> (Vec<BpafAttr>, Vec<DocInner>) {
 }
 
 /// Parse fields from a brace group
+/// Validate that positional fields come after all named fields
+fn validate_field_ordering(fields: &[StructField]) -> Result<()> {
+    let mut seen_positional = false;
+
+    for field in fields {
+        // A field is positional if it uses the positional consumer
+        let is_positional = matches!(field.attrs.consumer, Some(ConsumerType::Positional { .. }));
+
+        let mut iter = field.ty.to_token_iter();
+
+        if seen_positional && !is_positional {
+            // Found a named field after a positional field - error!
+            return unsynn::Error::other(
+                iter.next(),
+                &iter,
+                format!(
+                    "Field '{}' must come before positional fields. \
+                    All positional items must be placed at the end of the struct. \
+                    See bpaf documentation for `positional` for details.",
+                    field.name
+                ),
+            );
+        }
+
+        if is_positional {
+            seen_positional = true;
+        }
+    }
+
+    Ok(())
+}
+
 fn parse_fields(group: &BraceGroup) -> Result<Vec<StructField>> {
     let mut fields = Vec::new();
     let stream = group.0.stream();
@@ -154,6 +186,9 @@ fn parse_fields(group: &BraceGroup) -> Result<Vec<StructField>> {
             }
         }
     }
+
+    // Validate field ordering: positional fields must come last
+    validate_field_ordering(&fields)?;
 
     Ok(fields)
 }
